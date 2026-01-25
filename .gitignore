@@ -1,0 +1,9 @@
+__pycache__/
+
+
+.env.example
+.env
+
+model_names.md
+GoodAgentArch.py
+
