@@ -98,14 +98,15 @@ class AdGeneratorAgent(BaseAgent[bytes]):
         """
         prompt = state["image_generation_prompt"]
         aspect_ratio = state["aspect_ratio"]
+        additional_comments = state.get("additional_comments")
         product_image = Image.open(io.BytesIO(state["product_image"]))
         logo_image = Image.open(io.BytesIO(state["logo_image"]))
         
         # Get target dimensions
         target_size = self._get_target_size(aspect_ratio)
         
-        # Enhance the prompt with critical instructions (now includes logo instruction)
-        enhanced_prompt = self._enhance_prompt(prompt, aspect_ratio)
+        # Enhance the prompt with critical instructions (now includes logo instruction and additional comments)
+        enhanced_prompt = self._enhance_prompt(prompt, aspect_ratio, additional_comments)
         
         # Try to generate the ad image with logo integrated by AI
         generated_image = await self._generate_image(
@@ -143,8 +144,9 @@ class AdGeneratorAgent(BaseAgent[bytes]):
             "generated_ad_image": generated_ad_image,
         }
     
-    def _enhance_prompt(self, prompt: str, aspect_ratio: str) -> str:
+    def _enhance_prompt(self, prompt: str, aspect_ratio: str, additional_comments: str = None) -> str:
         """Enhance the prompt with critical instructions for image generation."""
+        from typing import Optional
         
         # Map aspect ratio to dimensions
         dimensions = {
@@ -154,6 +156,15 @@ class AdGeneratorAgent(BaseAgent[bytes]):
         }
         
         dimension_text = dimensions.get(aspect_ratio, "1080x1080 pixels (square)")
+        
+        # Build additional instructions section if provided
+        additional_section = ""
+        if additional_comments and additional_comments.strip():
+            additional_section = f"""
+7. ADDITIONAL USER INSTRUCTIONS - IMPORTANT:
+   {additional_comments}
+   - Follow these additional instructions carefully while maintaining overall quality
+"""
         
         critical_instructions = f"""
 CRITICAL INSTRUCTIONS FOR IMAGE GENERATION:
@@ -198,7 +209,7 @@ CRITICAL INSTRUCTIONS FOR IMAGE GENERATION:
 6. KEEP IT CLEAN:
    - Do NOT add any other text or overlays
    - Focus on the product, professional background, and the logo placement
-
+{additional_section}
 MAIN PROMPT:
 {prompt}
 """
