@@ -14,7 +14,13 @@ from datetime import datetime
 
 from config.settings import settings
 from config.templates import BACKGROUND_TEMPLATES
-from workflow import ad_generator_workflow, create_initial_state
+from workflow import create_initial_state
+from workflow.nodes import (
+    agent1_product_analyzer_sync,
+    agent2_prompt_generator_sync,
+    agent3_ad_generator_sync,
+    agent4_linkedin_text_sync,
+)
 from services.vector_store import vector_store
 
 # Configure logging
@@ -280,151 +286,124 @@ def render_empty_state():
         )
 
 
-def run_workflow():
-    """Execute the LangGraph workflow and update session state."""
-    try:
-        # Create initial state from session state
-        initial_state = create_initial_state(
-            platform=st.session_state.platform,
-            aspect_ratio=st.session_state.aspect_ratio,
-            product_image=st.session_state.product_image,
-            logo_image=st.session_state.logo_image,
-            product_name=st.session_state.product_name,
-            selected_category=st.session_state.selected_category,
-            additional_comments=st.session_state.additional_comments.strip() if st.session_state.additional_comments else None,
-        )
-        
-        # Run the workflow
-        logger.info(f"Starting workflow {initial_state['workflow_id']}")
-        logger.info(f"[DEBUG] selected_category passed to workflow: '{initial_state.get('selected_category')}'")
-        logger.info(f"[DEBUG] additional_comments passed to workflow: '{initial_state.get('additional_comments')}'..."[:100])
-        result = ad_generator_workflow.invoke(initial_state)
-        
-        # Check for errors
-        if result.get("error"):
-            st.session_state.error_message = f"Error in {result.get('error_agent', 'unknown')}: {result['error']}"
-            logger.error(st.session_state.error_message)
+def render_generation_progress():
+    """Render the generation progress indicator and run workflow with real-time updates."""
+    st.markdown("---")
+    
+    # Determine total steps
+    is_linkedin = st.session_state.platform == "linkedin"
+    total_steps = 4 if is_linkedin else 3
+    
+    # Create initial state
+    state = create_initial_state(
+        platform=st.session_state.platform,
+        aspect_ratio=st.session_state.aspect_ratio,
+        product_image=st.session_state.product_image,
+        logo_image=st.session_state.logo_image,
+        product_name=st.session_state.product_name,
+        selected_category=st.session_state.selected_category,
+        additional_comments=st.session_state.additional_comments.strip() if st.session_state.additional_comments else None,
+    )
+    
+    logger.info(f"Starting workflow {state['workflow_id']}")
+    logger.info(f"[DEBUG] selected_category passed to workflow: '{state.get('selected_category')}'")
+    
+    # Use st.status for real-time progress updates
+    with st.status("Generating your ad...", expanded=True) as status:
+        try:
+            # Step 1: Product Analyzer
+            st.write("**Step 1/{}:** Analyzing your product...".format(total_steps))
+            result = agent1_product_analyzer_sync(state)
+            state = {**state, **result}  # Merge result into state
+            if state.get("error"):
+                raise Exception(f"Product analysis failed: {state['error']}")
+            st.write("Product analyzed successfully!")
             
-            # Save failed workflow to history
-            try:
-                if result.get("product_analysis"):
-                    vector_store.save_workflow(
-                        workflow_id=result.get("workflow_id", "unknown"),
-                        platform=result.get("platform", st.session_state.platform),
-                        aspect_ratio=result.get("aspect_ratio", st.session_state.aspect_ratio),
-                        product_name=st.session_state.product_name,
-                        product_analysis=result.get("product_analysis", {}),
-                        image_generation_prompt=result.get("image_generation_prompt", ""),
-                        background_template=result.get("background_template_used", ""),
-                        success=False,
-                        error=result.get("error"),
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to save workflow to history: {e}")
-        else:
-            # Store results
-            st.session_state.workflow_state = result
+            # Step 2: Prompt Generator
+            st.write("**Step 2/{}:** Creating generation prompt...".format(total_steps))
+            result = agent2_prompt_generator_sync(state)
+            state = {**state, **result}  # Merge result into state
+            if state.get("error"):
+                raise Exception(f"Prompt generation failed: {state['error']}")
+            st.write("Prompt created successfully!")
             
-            # Convert generated ad bytes to PIL Image for display
-            if result.get("generated_ad_image"):
-                st.session_state.generated_ad = Image.open(
-                    io.BytesIO(result["generated_ad_image"])
-                )
+            # Step 3: Ad Generator
+            st.write("**Step 3/{}:** Generating your ad image...".format(total_steps))
+            st.caption("This may take 30-60 seconds...")
+            result = agent3_ad_generator_sync(state)
+            state = {**state, **result}  # Merge result into state
+            if state.get("error"):
+                raise Exception(f"Ad generation failed: {state['error']}")
+            st.write("Ad generated successfully!")
             
-            # Store LinkedIn text if available
-            st.session_state.linkedin_text = result.get("linkedin_post_text")
+            # Step 4: LinkedIn Text (if applicable)
+            if is_linkedin:
+                st.write("**Step 4/{}:** Writing LinkedIn post...".format(total_steps))
+                result = agent4_linkedin_text_sync(state)
+                state = {**state, **result}  # Merge result into state
+                if state.get("error"):
+                    raise Exception(f"LinkedIn text generation failed: {state['error']}")
+                st.write("LinkedIn post written successfully!")
             
-            # Save successful workflow to history
+            # Success!
+            status.update(label="Generation complete!", state="complete", expanded=False)
+            
+            # Store results in session state
+            st.session_state.workflow_state = state
+            if state.get("generated_ad_image"):
+                st.session_state.generated_ad = Image.open(io.BytesIO(state["generated_ad_image"]))
+            st.session_state.linkedin_text = state.get("linkedin_post_text")
+            
+            # Save to history
             try:
                 vector_store.save_workflow(
-                    workflow_id=result.get("workflow_id", "unknown"),
-                    platform=result.get("platform", st.session_state.platform),
-                    aspect_ratio=result.get("aspect_ratio", st.session_state.aspect_ratio),
+                    workflow_id=state.get("workflow_id", "unknown"),
+                    platform=state.get("platform", st.session_state.platform),
+                    aspect_ratio=state.get("aspect_ratio", st.session_state.aspect_ratio),
                     product_name=st.session_state.product_name,
-                    product_analysis=result.get("product_analysis") or {},
-                    image_generation_prompt=result.get("image_generation_prompt") or "",
-                    background_template=result.get("background_template_used") or "",
-                    linkedin_text=result.get("linkedin_post_text"),
+                    product_analysis=state.get("product_analysis") or {},
+                    image_generation_prompt=state.get("image_generation_prompt") or "",
+                    background_template=state.get("background_template_used") or "",
+                    linkedin_text=state.get("linkedin_post_text"),
                     success=True,
                 )
                 
-                # Also save the prompt for similarity search
-                if result.get("image_generation_prompt"):
+                if state.get("image_generation_prompt"):
                     vector_store.save_prompt(
-                        prompt=result["image_generation_prompt"],
+                        prompt=state["image_generation_prompt"],
                         product_name=st.session_state.product_name,
-                        product_category=result.get("product_analysis", {}).get("product_category", "general"),
-                        template_used=result.get("background_template_used", ""),
-                        platform=result["platform"],
-                        aspect_ratio=result["aspect_ratio"],
+                        product_category=state.get("product_analysis", {}).get("product_category", "general"),
+                        template_used=state.get("background_template_used", ""),
+                        platform=state["platform"],
+                        aspect_ratio=state["aspect_ratio"],
                     )
             except Exception as e:
                 logger.warning(f"Failed to save workflow to history: {e}")
             
-            logger.info(f"Workflow {result['workflow_id']} completed successfully")
-        
-    except Exception as e:
-        st.session_state.error_message = f"Workflow error: {str(e)}"
-        logger.exception("Workflow execution failed")
-    
-    finally:
-        st.session_state.generation_in_progress = False
-
-
-def render_generation_progress():
-    """Render the generation progress indicator and run workflow."""
-    st.markdown("---")
-    
-    # Progress container
-    st.subheader("Generating your ad...")
-    
-    # Define steps
-    steps = [
-        ("Analyzing Product", "Gemini examines your product image"),
-        ("Creating Prompt", "Claude crafts the perfect generation prompt"),
-        ("Generating Ad", "Imagen creates your professional ad"),
-    ]
-    
-    if st.session_state.platform == "linkedin":
-        steps.append(("Writing Copy", "Gemini writes your LinkedIn post"))
-    
-    # Show progress
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    # Create step indicators
-    cols = st.columns(len(steps))
-    step_placeholders = []
-    for i, (step_name, step_desc) in enumerate(steps):
-        with cols[i]:
-            st.markdown(f"**{i+1}. {step_name}**")
-            st.caption(step_desc)
-            step_placeholders.append(st.empty())
-    
-    # Run the workflow
-    status_text.text("Starting workflow...")
-    run_workflow()
-    progress_bar.progress(100)
-    
-    # Check for errors
-    if st.session_state.error_message:
-        st.error(st.session_state.error_message)
-        st.session_state.error_message = None
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Try Again", use_container_width=True):
-                st.session_state.generation_in_progress = True
-                st.rerun()
-        with col2:
-            if st.button("Start Over", use_container_width=True):
-                st.session_state.generated_ad = None
-                st.session_state.workflow_state = None
-                st.rerun()
-    else:
-        status_text.text("Complete!")
-        st.success("Your ad has been generated successfully!")
-        st.rerun()
+            logger.info(f"Workflow {state['workflow_id']} completed successfully")
+            st.session_state.generation_in_progress = False
+            st.rerun()
+            
+        except Exception as e:
+            status.update(label="Generation failed", state="error", expanded=True)
+            st.error(f"Error: {str(e)}")
+            logger.exception("Workflow execution failed")
+            
+            st.session_state.error_message = str(e)
+            st.session_state.generation_in_progress = False
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Try Again", use_container_width=True):
+                    st.session_state.generation_in_progress = True
+                    st.session_state.error_message = None
+                    st.rerun()
+            with col2:
+                if st.button("Start Over", use_container_width=True):
+                    st.session_state.generated_ad = None
+                    st.session_state.workflow_state = None
+                    st.session_state.error_message = None
+                    st.rerun()
 
 
 def render_results():
