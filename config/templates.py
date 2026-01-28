@@ -124,19 +124,20 @@ Editorial-quality commercial photography with impeccable attention to detail."""
     
     "home_decor_luxury": {
         "name": "Home Decor / Luxury Home Decor",
-        "description": "Warm, natural aesthetic with dried botanicals for home decor products",
-        "base_prompt": """Professional product photography background, eye-level shot, placed on a textured beige sandstone surface, background features blurred dried wheat stalks and small dried floral elements, soft warm natural window light coming from the left, shallow depth of field, strong bokeh effect in background, neutral earth tones, cream and tan color palette, minimalist, authentic texture, 8k resolution, photorealistic, no product in center, empty space for product placement.""",
+        "description": "Warm, earthy aesthetic with light brown tones and dried botanicals for home decor products",
+        "base_prompt": """Professional product photography background, eye-level shot, placed on a textured surface. CRITICAL COLOR REQUIREMENT: The background MUST be in LIGHT BROWN and EARTHY color tones - warm peachy beige, soft terracotta, muted caramel, and warm sand colors. Background features blurred dried wheat stalks and small dried floral elements. Soft warm natural window light coming from the left creating a cozy atmosphere. Shallow depth of field with strong bokeh effect in background. The entire color palette should feel warm, earthy, and organic - think warm autumn tones, light brown clay, soft peach, and natural wood colors. Minimalist composition, authentic texture, 8k resolution, photorealistic, no product in center, empty space for product placement.""",
         "color_palette": [
-            "beige",
-            "cream",
-            "tan",
-            "neutral earth tones",
-            "warm sand"
+            "light brown",
+            "warm peachy beige",
+            "soft terracotta",
+            "muted caramel",
+            "warm sand",
+            "earthy tan"
         ],
-        "lighting": "Soft warm natural window light coming from the left, shallow depth of field",
-        "mood": "Warm, natural, minimalist, authentic, cozy",
-        "surface_materials": ["textured beige sandstone surface"],
-        "props": ["dried wheat stalks", "small dried floral elements"]
+        "lighting": "Soft warm natural window light coming from the left, creating warm earthy atmosphere, shallow depth of field",
+        "mood": "Warm, earthy, natural, minimalist, authentic, cozy",
+        "surface_materials": ["textured light brown surface", "natural wood", "earthy sandstone"],
+        "props": ["dried wheat stalks", "small dried floral elements", "subtle greenery"]
     }
 }
 
