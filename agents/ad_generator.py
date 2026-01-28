@@ -4,6 +4,7 @@ from typing import Any
 from PIL import Image
 import io
 import os
+import time
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -42,6 +43,35 @@ class AdGeneratorAgent(BaseAgent[bytes]):
             self.logger.info("Agent 3 (Ad Generator) initialized with Google GenAI")
         else:
             self.logger.warning("No API key configured for Agent 3 (Ad Generator)")
+    
+    def _resize_for_api(self, image: Image.Image, max_dimension: int = 768) -> Image.Image:
+        """
+        Resize image to reduce API payload and prevent timeouts.
+        
+        Args:
+            image: PIL Image to resize
+            max_dimension: Maximum width or height (default 768px)
+            
+        Returns:
+            Resized PIL Image
+        """
+        width, height = image.size
+        
+        # Only resize if larger than max_dimension
+        if width <= max_dimension and height <= max_dimension:
+            return image
+        
+        # Calculate new size maintaining aspect ratio
+        if width > height:
+            new_width = max_dimension
+            new_height = int(height * (max_dimension / width))
+        else:
+            new_height = max_dimension
+            new_width = int(width * (max_dimension / height))
+        
+        resized = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        self.logger.info(f"Resized image from {width}x{height} to {new_width}x{new_height} for API")
+        return resized
     
     def validate_inputs(self, state: WorkflowState) -> bool:
         """Validate that prompt and images are present."""
@@ -183,64 +213,84 @@ MAIN PROMPT:
     ) -> Image.Image:
         """
         Generate the ad image using Google's Gemini image generation.
+        Includes image resizing and retry logic to prevent timeouts.
         """
         if not self.client:
             self.logger.warning("No client available, using placeholder")
             return self._create_placeholder_ad(product_image, target_size)
         
-        try:
-            # Prepare contents: prompt + product image + logo image
-            # The logo is passed to the AI for integration
-            contents = [prompt, product_image, logo_image]
-            
-            # Try Gemini 3 Pro first, fallback to Gemini 2.5 Flash
-            model_name = "models/gemini-3-pro-image-preview"
-            
-            try:
-                response = self.client.models.generate_content(
-                    model="models/gemini-3-pro-image-preview",
-                    contents=contents,
-                )
-                self.logger.info("Generated image with gemini-3-pro-image-preview")
-            except Exception as pro_error:
-                self.logger.warning(f"Gemini 3 Pro failed: {pro_error}, trying fallback...")
+        # Resize images to reduce payload and prevent timeouts
+        product_resized = self._resize_for_api(product_image, max_dimension=768)
+        logo_resized = self._resize_for_api(logo_image, max_dimension=256)
+        
+        # Prepare contents: prompt + resized product image + resized logo image
+        contents = [prompt, product_resized, logo_resized]
+        
+        # Retry configuration
+        max_retries = 3
+        retry_delays = [5, 10, 20]  # Exponential backoff in seconds
+        
+        models_to_try = [
+            "models/gemini-3-pro-image-preview",
+            "gemini-2.5-flash-image"
+        ]
+        
+        last_error = None
+        
+        for attempt in range(max_retries):
+            for model_name in models_to_try:
                 try:
+                    self.logger.info(f"Attempt {attempt + 1}/{max_retries}: Trying {model_name}...")
+                    
                     response = self.client.models.generate_content(
-                        model="gemini-2.5-flash-image",
+                        model=model_name,
                         contents=contents,
                     )
-                    model_name = "gemini-2.5-flash-image"
-                    self.logger.info("Generated image with gemini-2.5-flash-image")
-                except Exception as fallback_error:
-                    self.logger.error(f"Fallback also failed: {fallback_error}")
-                    raise pro_error
+                    
+                    # Process the response - look for image data
+                    generated_image = None
+                    result_text = ""
+                    
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'text') and part.text is not None:
+                            result_text += part.text
+                        elif hasattr(part, 'inline_data') and part.inline_data is not None:
+                            # Found the generated image
+                            image_data = part.inline_data.data
+                            generated_image = Image.open(io.BytesIO(image_data))
+                            self.logger.info(f"Successfully generated image with {model_name}: {generated_image.size}")
+                    
+                    if generated_image:
+                        # Resize to target size if needed
+                        if generated_image.size != target_size:
+                            generated_image = generated_image.resize(target_size, Image.Resampling.LANCZOS)
+                        return generated_image
+                    else:
+                        self.logger.warning(f"No image in response from {model_name}")
+                        self.logger.debug(f"Response text: {result_text[:500] if result_text else 'None'}")
+                        continue  # Try next model
+                        
+                except Exception as e:
+                    last_error = e
+                    error_str = str(e)
+                    self.logger.warning(f"{model_name} failed: {error_str}")
+                    
+                    # If it's a 503 timeout, continue to next model or retry
+                    if "503" in error_str or "UNAVAILABLE" in error_str:
+                        continue
+                    else:
+                        # For other errors, skip to next model
+                        continue
             
-            # Process the response - look for image data
-            generated_image = None
-            result_text = ""
-            
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'text') and part.text is not None:
-                    result_text += part.text
-                elif hasattr(part, 'inline_data') and part.inline_data is not None:
-                    # Found the generated image
-                    image_data = part.inline_data.data
-                    generated_image = Image.open(io.BytesIO(image_data))
-                    self.logger.info(f"Successfully extracted generated image: {generated_image.size}")
-            
-            if generated_image:
-                # Resize to target size if needed
-                if generated_image.size != target_size:
-                    generated_image = generated_image.resize(target_size, Image.Resampling.LANCZOS)
-                return generated_image
-            else:
-                self.logger.warning("No image in response, using placeholder")
-                self.logger.debug(f"Response text: {result_text[:500] if result_text else 'None'}")
-                return self._create_placeholder_ad(product_image, target_size)
-                
-        except Exception as e:
-            self.logger.error(f"Image generation failed: {e}")
-            return self._create_placeholder_ad(product_image, target_size)
+            # All models failed for this attempt, wait before retrying
+            if attempt < max_retries - 1:
+                delay = retry_delays[attempt]
+                self.logger.info(f"All models failed. Waiting {delay}s before retry {attempt + 2}...")
+                time.sleep(delay)
+        
+        # All retries exhausted
+        self.logger.error(f"Image generation failed after {max_retries} attempts. Last error: {last_error}")
+        return self._create_placeholder_ad(product_image, target_size)
     
     def _get_target_size(self, aspect_ratio: str) -> tuple[int, int]:
         """Get target dimensions for the given aspect ratio."""
