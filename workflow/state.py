@@ -34,6 +34,8 @@ class WorkflowState(TypedDict):
     product_image: bytes
     logo_image: bytes
     product_name: str
+    selected_category: str  # User-selected category from templates (or "others" for auto-detect)
+    additional_comments: Optional[str]  # Extra instructions to append to prompt
     
     # ===== Agent 1 Outputs: Product Analyzer (Gemini) =====
     product_analysis: Optional[ProductAnalysis]
@@ -66,6 +68,8 @@ def create_initial_state(
     product_image: bytes,
     logo_image: bytes,
     product_name: str,
+    selected_category: str = "others",
+    additional_comments: Optional[str] = None,
 ) -> WorkflowState:
     """
     Create an initial workflow state with user inputs.
@@ -76,6 +80,8 @@ def create_initial_state(
         product_image: Raw bytes of the product image
         logo_image: Raw bytes of the company logo
         product_name: Name of the product
+        selected_category: User-selected category from templates (or "others" for auto-detect)
+        additional_comments: Extra instructions to append to the prompt
         
     Returns:
         Initialized WorkflowState ready for workflow execution
@@ -87,6 +93,8 @@ def create_initial_state(
         product_image=product_image,
         logo_image=logo_image,
         product_name=product_name,
+        selected_category=selected_category,
+        additional_comments=additional_comments,
         
         # Agent outputs (initially None)
         product_analysis=None,
