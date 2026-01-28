@@ -296,6 +296,8 @@ def run_workflow():
         
         # Run the workflow
         logger.info(f"Starting workflow {initial_state['workflow_id']}")
+        logger.info(f"[DEBUG] selected_category passed to workflow: '{initial_state.get('selected_category')}'")
+        logger.info(f"[DEBUG] additional_comments passed to workflow: '{initial_state.get('additional_comments')}'..."[:100])
         result = ad_generator_workflow.invoke(initial_state)
         
         # Check for errors

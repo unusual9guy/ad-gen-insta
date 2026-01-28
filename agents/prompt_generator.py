@@ -107,10 +107,14 @@ class PromptGeneratorAgent(BaseAgent[str]):
         """Select the most appropriate background template for the product."""
         selected_category = state.get("selected_category", "others")
         
+        self.logger.info(f"[DEBUG] selected_category from state: '{selected_category}'")
+        self.logger.info(f"[DEBUG] Available templates: {list(BACKGROUND_TEMPLATES.keys())}")
+        
         # If user selected a specific category, use that template directly
         if selected_category != "others" and selected_category in BACKGROUND_TEMPLATES:
-            self.logger.info(f"Using user-selected category template: {selected_category}")
-            return BACKGROUND_TEMPLATES[selected_category]
+            template = BACKGROUND_TEMPLATES[selected_category]
+            self.logger.info(f"Using user-selected category template: {selected_category} -> {template['name']}")
+            return template
         
         # Otherwise, auto-detect from product analysis
         analysis = state["product_analysis"]
