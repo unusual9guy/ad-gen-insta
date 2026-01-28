@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from agents.base import BaseAgent
 from workflow.state import WorkflowState
 from config.settings import settings
-from config.templates import get_template_for_product, BackgroundTemplate
+from config.templates import get_template_for_product, BackgroundTemplate, BACKGROUND_TEMPLATES
 
 
 PROMPT_GENERATION_SYSTEM = """You are an expert creative director specializing in product photography and advertising. Your task is to create detailed, effective image generation prompts that will produce stunning product advertisements.
@@ -105,8 +105,17 @@ class PromptGeneratorAgent(BaseAgent[str]):
     
     def _select_template(self, state: WorkflowState) -> BackgroundTemplate:
         """Select the most appropriate background template for the product."""
+        selected_category = state.get("selected_category", "others")
+        
+        # If user selected a specific category, use that template directly
+        if selected_category != "others" and selected_category in BACKGROUND_TEMPLATES:
+            self.logger.info(f"Using user-selected category template: {selected_category}")
+            return BACKGROUND_TEMPLATES[selected_category]
+        
+        # Otherwise, auto-detect from product analysis
         analysis = state["product_analysis"]
         product_category = analysis.get("product_category", "general")
+        self.logger.info(f"Auto-detecting template from product category: {product_category}")
         
         # Get template based on product category
         return get_template_for_product(product_category)
