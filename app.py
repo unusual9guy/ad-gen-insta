@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 
 from config.settings import settings
+from config.templates import BACKGROUND_TEMPLATES
 from workflow import ad_generator_workflow, create_initial_state
 from services.vector_store import vector_store
 
@@ -34,6 +35,9 @@ def init_session_state():
         "aspect_ratio": "1:1",
         # Step 5: Product details
         "product_name": "",
+        # Step 6-7: Category and additional comments
+        "selected_category": "others",
+        "additional_comments": "",
         # Workflow results
         "workflow_state": None,
         "generated_ad": None,
@@ -147,6 +151,38 @@ def render_sidebar():
         )
         st.session_state.product_name = product_name
         
+        # Step 6: Category Selection
+        st.markdown("### 5. Product Category")
+        
+        # Build category options from templates
+        category_options = {
+            "others": "Others (Auto-detect)",
+        }
+        for key, template in BACKGROUND_TEMPLATES.items():
+            category_options[key] = template["name"]
+        
+        selected_category = st.selectbox(
+            "Select Category",
+            options=list(category_options.keys()),
+            format_func=lambda x: category_options[x],
+            index=list(category_options.keys()).index(st.session_state.selected_category),
+            key="category_selector",
+            help="Select the category that best matches your product. This determines the background style."
+        )
+        st.session_state.selected_category = selected_category
+        
+        # Step 7: Additional Comments
+        st.markdown("### 6. Additional Instructions")
+        additional_comments = st.text_area(
+            "Additional Comments (Optional)",
+            value=st.session_state.additional_comments,
+            placeholder="e.g., Add cutlery next to my product - cutlery holder\nAdd an elegant whiskey glass on top - coaster",
+            height=100,
+            key="additional_comments_input",
+            help="Extra instructions for the AI to customize the ad (props, styling, etc.)"
+        )
+        st.session_state.additional_comments = additional_comments
+        
         st.divider()
         
         # Generate Button
@@ -254,6 +290,8 @@ def run_workflow():
             product_image=st.session_state.product_image,
             logo_image=st.session_state.logo_image,
             product_name=st.session_state.product_name,
+            selected_category=st.session_state.selected_category,
+            additional_comments=st.session_state.additional_comments.strip() if st.session_state.additional_comments else None,
         )
         
         # Run the workflow
@@ -447,6 +485,8 @@ def render_results():
             st.session_state.product_image = None
             st.session_state.logo_image = None
             st.session_state.product_name = ""
+            st.session_state.selected_category = "others"
+            st.session_state.additional_comments = ""
             st.rerun()
         
         st.divider()
