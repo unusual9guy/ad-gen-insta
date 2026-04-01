@@ -21,7 +21,7 @@ from workflow.nodes import (
     agent3_ad_generator_sync,
     agent4_linkedin_text_sync,
 )
-from services.vector_store import vector_store
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -97,7 +97,7 @@ def render_sidebar():
             if result:
                 st.session_state.product_image = result[0]
                 st.session_state.product_image_preview = result[1]
-                st.image(result[1], caption="Product Preview", width="stretch")
+                st.image(result[1], caption="Product Preview", use_container_width=True)
         
         st.divider()
         
@@ -115,7 +115,7 @@ def render_sidebar():
             if result:
                 st.session_state.logo_image = result[0]
                 st.session_state.logo_image_preview = result[1]
-                st.image(result[1], caption="Logo Preview", width="stretch")
+                st.image(result[1], caption="Logo Preview", use_container_width=True)
         
         st.divider()
         
@@ -354,31 +354,7 @@ def render_generation_progress():
                 st.session_state.generated_ad = Image.open(io.BytesIO(state["generated_ad_image"]))
             st.session_state.linkedin_text = state.get("linkedin_post_text")
             
-            # Save to history
-            try:
-                vector_store.save_workflow(
-                    workflow_id=state.get("workflow_id", "unknown"),
-                    platform=state.get("platform", st.session_state.platform),
-                    aspect_ratio=state.get("aspect_ratio", st.session_state.aspect_ratio),
-                    product_name=st.session_state.product_name,
-                    product_analysis=state.get("product_analysis") or {},
-                    image_generation_prompt=state.get("image_generation_prompt") or "",
-                    background_template=state.get("background_template_used") or "",
-                    linkedin_text=state.get("linkedin_post_text"),
-                    success=True,
-                )
-                
-                if state.get("image_generation_prompt"):
-                    vector_store.save_prompt(
-                        prompt=state["image_generation_prompt"],
-                        product_name=st.session_state.product_name,
-                        product_category=state.get("product_analysis", {}).get("product_category", "general"),
-                        template_used=state.get("background_template_used", ""),
-                        platform=state["platform"],
-                        aspect_ratio=state["aspect_ratio"],
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to save workflow to history: {e}")
+
             
             logger.info(f"Workflow {state['workflow_id']} completed successfully")
             st.session_state.generation_in_progress = False
@@ -416,7 +392,7 @@ def render_results():
     with col1:
         # Generated Ad Image
         st.subheader("Generated Ad")
-        st.image(st.session_state.generated_ad, width="stretch")
+        st.image(st.session_state.generated_ad, use_container_width=True)
         
         # LinkedIn text (if applicable)
         if st.session_state.platform == "linkedin" and st.session_state.linkedin_text:
@@ -493,50 +469,7 @@ def render_history():
     st.markdown("---")
     st.subheader("Generation History")
     
-    # Get recent workflows
-    try:
-        workflows = vector_store.get_recent_workflows(limit=10)
-        
-        if not workflows:
-            st.info("No generation history yet. Create your first ad to see it here!")
-            return
-        
-        for wf in workflows:
-            metadata = wf.get("metadata", {})
-            
-            with st.expander(
-                f"{metadata.get('product_name', 'Unknown')} - {metadata.get('platform', '').title()} ({metadata.get('aspect_ratio', '')})",
-                expanded=False
-            ):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**Product:** {metadata.get('product_name', 'N/A')}")
-                    st.markdown(f"**Type:** {metadata.get('product_type', 'N/A')}")
-                    st.markdown(f"**Category:** {metadata.get('product_category', 'N/A')}")
-                
-                with col2:
-                    st.markdown(f"**Platform:** {metadata.get('platform', 'N/A').title()}")
-                    st.markdown(f"**Template:** {metadata.get('background_template', 'N/A')}")
-                    status = "Success" if metadata.get("success") else "Failed"
-                    st.markdown(f"**Status:** {status}")
-                
-                # Format timestamp
-                created_at = metadata.get("created_at", "")
-                if created_at:
-                    try:
-                        dt = datetime.fromisoformat(created_at)
-                        st.caption(f"Created: {dt.strftime('%Y-%m-%d %H:%M')}")
-                    except:
-                        st.caption(f"Created: {created_at}")
-        
-        # Stats
-        st.divider()
-        stats = vector_store.get_stats()
-        st.caption(f"Total workflows: {stats.get('total_workflows', 0)} | Total prompts: {stats.get('total_prompts', 0)}")
-        
-    except Exception as e:
-        st.error(f"Failed to load history: {e}")
+    st.info("History feature is not available yet. Stay tuned!")
     
     # Back button
     if st.button("Back to Generator"):
