@@ -12,6 +12,7 @@ from typing import Optional
 import logging
 from datetime import datetime
 
+from services.image_processor import ImageProcessor
 from config.settings import settings
 from config.templates import BACKGROUND_TEMPLATES
 from workflow import create_initial_state
@@ -72,7 +73,7 @@ def process_uploaded_image(uploaded_file) -> Optional[tuple[bytes, Image.Image]]
 
 def get_aspect_ratio_options(platform: str) -> list[str]:
     """Get available aspect ratios based on selected platform."""
-    if platform == "instagram":
+    if platform == "instagram" or platform == "pomelli":
         return settings.instagram_aspect_ratios
     else:
         return settings.linkedin_aspect_ratios
@@ -83,8 +84,23 @@ def render_sidebar():
     with st.sidebar:
         st.markdown("## Ad Configuration")
         
-        # Step 1: Product Image Upload
-        st.markdown("### 1. Product Image")
+        # Step 1: Platform Selection (moved to top)
+        st.markdown("### 1. Platform")
+        platform = st.radio(
+            "Select target platform",
+            options=["instagram", "linkedin", "pomelli"],
+            format_func=lambda x: {"instagram": "Instagram", "linkedin": "LinkedIn", "pomelli": "Pomelli"}[x],
+            key="platform_selector",
+            horizontal=True
+        )
+        st.session_state.platform = platform
+        
+        is_pomelli = platform == "pomelli"
+        
+        st.divider()
+        
+        # Step 2: Product Image Upload
+        st.markdown("### 2. Product Image")
         product_file = st.file_uploader(
             "Upload your product image",
             type=["png", "jpg", "jpeg", "webp"],
@@ -101,13 +117,13 @@ def render_sidebar():
         
         st.divider()
         
-        # Step 2: Logo Upload
-        st.markdown("### 2. Company Logo")
+        # Step 3: Logo Upload
+        st.markdown("### 3. Company Logo")
         logo_file = st.file_uploader(
             "Upload your company logo",
             type=["png", "jpg", "jpeg", "webp"],
             key="logo_uploader",
-            help="Logo will be converted to monochrome and placed in top-right corner"
+            help="Logo will be converted to black and placed in top-right corner" if is_pomelli else "Logo will be converted to monochrome and placed in top-right corner"
         )
         
         if logo_file:
@@ -119,87 +135,87 @@ def render_sidebar():
         
         st.divider()
         
-        # Step 3: Platform Selection
-        st.markdown("### 3. Platform")
-        platform = st.radio(
-            "Select target platform",
-            options=["instagram", "linkedin"],
-            format_func=lambda x: "Instagram" if x == "instagram" else "LinkedIn",
-            key="platform_selector",
-            horizontal=True
-        )
-        st.session_state.platform = platform
-        
-        # Step 4: Aspect Ratio (options depend on platform)
-        aspect_options = get_aspect_ratio_options(platform)
-        
-        # Reset aspect ratio if current selection not valid for new platform
-        if st.session_state.aspect_ratio not in aspect_options:
-            st.session_state.aspect_ratio = aspect_options[0]
-        
-        aspect_ratio = st.selectbox(
-            "Aspect Ratio",
-            options=aspect_options,
-            index=aspect_options.index(st.session_state.aspect_ratio),
-            key="aspect_selector"
-        )
-        st.session_state.aspect_ratio = aspect_ratio
-        
-        st.divider()
-        
-        # Step 5: Product Name
-        st.markdown("### 4. Product Details")
-        product_name = st.text_input(
-            "Product Name",
-            value=st.session_state.product_name,
-            placeholder="e.g., Premium Wireless Headphones",
-            key="product_name_input"
-        )
-        st.session_state.product_name = product_name
-        
-        # Step 6: Category Selection
-        st.markdown("### 5. Product Category")
-        
-        # Build category options from templates
-        category_options = {
-            "others": "Others (Auto-detect)",
-        }
-        for key, template in BACKGROUND_TEMPLATES.items():
-            category_options[key] = template["name"]
-        
-        selected_category = st.selectbox(
-            "Select Category",
-            options=list(category_options.keys()),
-            format_func=lambda x: category_options[x],
-            index=list(category_options.keys()).index(st.session_state.selected_category),
-            key="category_selector",
-            help="Select the category that best matches your product. This determines the background style."
-        )
-        st.session_state.selected_category = selected_category
-        
-        # Step 7: Additional Comments
-        st.markdown("### 6. Additional Instructions")
-        additional_comments = st.text_area(
-            "Additional Comments (Optional)",
-            value=st.session_state.additional_comments,
-            placeholder="e.g., Add cutlery next to my product - cutlery holder\nAdd an elegant whiskey glass on top - coaster",
-            height=100,
-            key="additional_comments_input",
-            help="Extra instructions for the AI to customize the ad (props, styling, etc.)"
-        )
-        st.session_state.additional_comments = additional_comments
-        
-        st.divider()
+        # Only show these fields for non-pomelli modes
+        if not is_pomelli:
+            # Step 4: Aspect Ratio (options depend on platform)
+            aspect_options = get_aspect_ratio_options(platform)
+            
+            # Reset aspect ratio if current selection not valid for new platform
+            if st.session_state.aspect_ratio not in aspect_options:
+                st.session_state.aspect_ratio = aspect_options[0]
+            
+            aspect_ratio = st.selectbox(
+                "Aspect Ratio",
+                options=aspect_options,
+                index=aspect_options.index(st.session_state.aspect_ratio),
+                key="aspect_selector"
+            )
+            st.session_state.aspect_ratio = aspect_ratio
+            
+            st.divider()
+            
+            # Step 5: Product Name
+            st.markdown("### 4. Product Details")
+            product_name = st.text_input(
+                "Product Name",
+                value=st.session_state.product_name,
+                placeholder="e.g., Premium Wireless Headphones",
+                key="product_name_input"
+            )
+            st.session_state.product_name = product_name
+            
+            # Step 6: Category Selection
+            st.markdown("### 5. Product Category")
+            
+            # Build category options from templates
+            category_options = {
+                "others": "Others (Auto-detect)",
+            }
+            for key, template in BACKGROUND_TEMPLATES.items():
+                category_options[key] = template["name"]
+            
+            selected_category = st.selectbox(
+                "Select Category",
+                options=list(category_options.keys()),
+                format_func=lambda x: category_options[x],
+                index=list(category_options.keys()).index(st.session_state.selected_category),
+                key="category_selector",
+                help="Select the category that best matches your product. This determines the background style."
+            )
+            st.session_state.selected_category = selected_category
+            
+            # Step 7: Additional Comments
+            st.markdown("### 6. Additional Instructions")
+            additional_comments = st.text_area(
+                "Additional Comments (Optional)",
+                value=st.session_state.additional_comments,
+                placeholder="e.g., Add cutlery next to my product - cutlery holder\nAdd an elegant whiskey glass on top - coaster",
+                height=100,
+                key="additional_comments_input",
+                help="Extra instructions for the AI to customize the ad (props, styling, etc.)"
+            )
+            st.session_state.additional_comments = additional_comments
+            
+            st.divider()
+        else:
+            # Pomelli mode info
+            st.info("Pomelli mode: Your photo will be kept as-is with a black logo overlay in the top-right corner.")
         
         # Generate Button
-        can_generate = all([
-            st.session_state.product_image,
-            st.session_state.logo_image,
-            st.session_state.product_name.strip()
-        ])
+        if is_pomelli:
+            can_generate = all([
+                st.session_state.product_image,
+                st.session_state.logo_image,
+            ])
+        else:
+            can_generate = all([
+                st.session_state.product_image,
+                st.session_state.logo_image,
+                st.session_state.product_name.strip()
+            ])
         
         generate_button = st.button(
-            "Generate Ad",
+            "Apply Logo" if is_pomelli else "Generate Ad",
             type="primary",
             disabled=not can_generate or st.session_state.generation_in_progress,
             use_container_width=True
@@ -218,7 +234,7 @@ def render_sidebar():
                 missing.append("product image")
             if not st.session_state.logo_image:
                 missing.append("company logo")
-            if not st.session_state.product_name.strip():
+            if not is_pomelli and not st.session_state.product_name.strip():
                 missing.append("product name")
             
             st.caption(f"Missing: {', '.join(missing)}")
@@ -243,7 +259,10 @@ def render_main_content():
     
     # Show generation progress or results
     if st.session_state.generation_in_progress:
-        render_generation_progress()
+        if st.session_state.platform == "pomelli":
+            render_pomelli_progress()
+        else:
+            render_generation_progress()
     elif st.session_state.generated_ad:
         render_results()
     elif st.session_state.show_history:
@@ -284,6 +303,82 @@ def render_empty_state():
             | **Copywriter** | Writes LinkedIn post (if selected) |
             """
         )
+
+
+def render_pomelli_progress():
+    """Render pomelli mode: use Gemini API to place black logo on the original photo."""
+    st.markdown("---")
+    
+    # Pomelli-specific prompt: keep the photo as-is, just place the logo
+    pomelli_prompt = """
+POMELLI MODE - LOGO PLACEMENT ONLY:
+
+ABSOLUTE RULES - DO NOT BREAK ANY OF THESE:
+1. DO NOT modify, alter, or change the original photo in ANY way
+2. DO NOT change colors, lighting, background, or any visual element of the photo
+3. DO NOT add any text, effects, filters, or overlays other than the logo
+4. The ONLY change allowed is placing the logo
+
+LOGO RULES - CRITICAL:
+- USE THE EXACT LOGO IMAGE PROVIDED - do NOT redraw, recreate, or modify the logo shape/design in ANY way
+- The logo must be a PIXEL-PERFECT copy of the provided logo image
+- DO NOT change the logo's shape, proportions, text, icons, or any detail whatsoever
+- DO NOT simplify, stylize, or reinterpret the logo - use it EXACTLY as given
+- The ONLY modification allowed is making the logo BLACK/MONOCHROME in color
+- Convert all non-transparent parts of the logo to solid BLACK color
+- Remove any white/light background from the logo - only show the logo graphic itself
+
+PLACEMENT INSTRUCTIONS:
+- Place the black version of the EXACT provided logo in the TOP-RIGHT CORNER of the image
+- Make the logo SMALL - about 5-8% of the image width
+- The logo should look professionally placed, subtle and elegant
+- Keep the original photo COMPLETELY UNCHANGED underneath
+
+OUTPUT: Return the EXACT same photo with ONLY the exact provided logo (made black) placed in the top-right corner.
+"""
+    
+    with st.status("Applying logo via AI...", expanded=True) as status:
+        try:
+            st.write("**Step 1/1:** Using Gemini to place black logo on your image...")
+            st.caption("This may take 15-30 seconds...")
+            
+            # Create a minimal workflow state for Agent 3
+            state = create_initial_state(
+                platform="instagram",  # doesn't matter for pomelli
+                aspect_ratio="1:1",  # will be overridden by actual image size
+                product_image=st.session_state.product_image,
+                logo_image=st.session_state.logo_image,
+                product_name="pomelli",
+            )
+            # Set the pomelli-specific prompt (skipping agents 1 & 2)
+            state["image_generation_prompt"] = pomelli_prompt
+            
+            # Call Agent 3 directly
+            result = agent3_ad_generator_sync(state)
+            state = {**state, **result}
+            
+            if state.get("error"):
+                raise Exception(f"Logo placement failed: {state['error']}")
+            
+            st.write("Logo applied successfully!")
+            status.update(label="Done!", state="complete", expanded=False)
+            
+            # Store result
+            st.session_state.workflow_state = state
+            if state.get("generated_ad_image"):
+                st.session_state.generated_ad = Image.open(io.BytesIO(state["generated_ad_image"]))
+            st.session_state.generation_in_progress = False
+            st.rerun()
+            
+        except Exception as e:
+            status.update(label="Failed", state="error", expanded=True)
+            st.error(f"Error: {str(e)}")
+            logger.exception("Pomelli logo placement failed")
+            st.session_state.generation_in_progress = False
+            
+            if st.button("Try Again", use_container_width=True):
+                st.session_state.generation_in_progress = True
+                st.rerun()
 
 
 def render_generation_progress():

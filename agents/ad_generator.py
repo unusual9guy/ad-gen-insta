@@ -105,8 +105,11 @@ class AdGeneratorAgent(BaseAgent[bytes]):
         # Get target dimensions
         target_size = self._get_target_size(aspect_ratio)
         
-        # Enhance the prompt with critical instructions (now includes logo instruction and additional comments)
-        enhanced_prompt = self._enhance_prompt(prompt, aspect_ratio, additional_comments)
+        # Enhance the prompt with critical instructions (skip for pomelli mode)
+        if "POMELLI MODE" in prompt:
+            enhanced_prompt = prompt  # Pomelli prompt is self-contained
+        else:
+            enhanced_prompt = self._enhance_prompt(prompt, aspect_ratio, additional_comments)
         
         # Try to generate the ad image with logo integrated by AI
         generated_image = await self._generate_image(
