@@ -73,7 +73,7 @@ def process_uploaded_image(uploaded_file) -> Optional[tuple[bytes, Image.Image]]
 
 def get_aspect_ratio_options(platform: str) -> list[str]:
     """Get available aspect ratios based on selected platform."""
-    if platform == "instagram" or platform == "pomelli":
+    if platform == "instagram" or platform == "pomelli" or platform == "rakhi":
         return settings.instagram_aspect_ratios
     else:
         return settings.linkedin_aspect_ratios
@@ -88,55 +88,66 @@ def render_sidebar():
         st.markdown("### 1. Platform")
         platform = st.radio(
             "Select target platform",
-            options=["instagram", "linkedin", "pomelli"],
-            format_func=lambda x: {"instagram": "Instagram", "linkedin": "LinkedIn", "pomelli": "Pomelli"}[x],
+            options=["instagram", "linkedin", "pomelli", "rakhi"],
+            format_func=lambda x: {"instagram": "Instagram", "linkedin": "LinkedIn", "pomelli": "Pomelli", "rakhi": "Rakhi"}[x],
             key="platform_selector",
             horizontal=True
         )
         st.session_state.platform = platform
         
         is_pomelli = platform == "pomelli"
+        is_rakhi = platform == "rakhi"
         
         st.divider()
         
-        # Step 2: Product Image Upload
-        st.markdown("### 2. Product Image")
-        product_file = st.file_uploader(
-            "Upload your product image",
-            type=["png", "jpg", "jpeg", "webp"],
-            key="product_uploader",
-            help="Upload a clear image of your product"
-        )
+        # Step 2: Product Image Upload (or Rakhi Image for rakhi mode)
+        if is_rakhi:
+            st.markdown("### 2. Rakhi Image")
+            product_file = st.file_uploader(
+                "Upload your rakhi photo",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="product_uploader",
+                help="Upload a clear photo of your rakhi for photoshoot-level enhancement"
+            )
+        else:
+            st.markdown("### 2. Product Image")
+            product_file = st.file_uploader(
+                "Upload your product image",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="product_uploader",
+                help="Upload a clear image of your product"
+            )
         
         if product_file:
             result = process_uploaded_image(product_file)
             if result:
                 st.session_state.product_image = result[0]
                 st.session_state.product_image_preview = result[1]
-                st.image(result[1], caption="Product Preview", use_container_width=True)
+                st.image(result[1], caption="Rakhi Preview" if is_rakhi else "Product Preview", use_container_width=True)
         
         st.divider()
         
-        # Step 3: Logo Upload
-        st.markdown("### 3. Company Logo")
-        logo_file = st.file_uploader(
-            "Upload your company logo",
-            type=["png", "jpg", "jpeg", "webp"],
-            key="logo_uploader",
-            help="Logo will be converted to black and placed in top-right corner" if is_pomelli else "Logo will be converted to monochrome and placed in top-right corner"
-        )
+        # Step 3: Logo Upload (skip for rakhi mode)
+        if not is_rakhi:
+            st.markdown("### 3. Company Logo")
+            logo_file = st.file_uploader(
+                "Upload your company logo",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="logo_uploader",
+                help="Logo will be converted to black and placed in top-right corner" if is_pomelli else "Logo will be converted to monochrome and placed in top-right corner"
+            )
+            
+            if logo_file:
+                result = process_uploaded_image(logo_file)
+                if result:
+                    st.session_state.logo_image = result[0]
+                    st.session_state.logo_image_preview = result[1]
+                    st.image(result[1], caption="Logo Preview", use_container_width=True)
+            
+            st.divider()
         
-        if logo_file:
-            result = process_uploaded_image(logo_file)
-            if result:
-                st.session_state.logo_image = result[0]
-                st.session_state.logo_image_preview = result[1]
-                st.image(result[1], caption="Logo Preview", use_container_width=True)
-        
-        st.divider()
-        
-        # Only show these fields for non-pomelli modes
-        if not is_pomelli:
+        # Only show these fields for standard ad modes (not pomelli or rakhi)
+        if not is_pomelli and not is_rakhi:
             # Step 4: Aspect Ratio (options depend on platform)
             aspect_options = get_aspect_ratio_options(platform)
             
@@ -197,12 +208,17 @@ def render_sidebar():
             st.session_state.additional_comments = additional_comments
             
             st.divider()
-        else:
+        elif is_pomelli:
             # Pomelli mode info
             st.info("Pomelli mode: Your photo will be kept as-is with a black logo overlay in the top-right corner.")
+        elif is_rakhi:
+            # Rakhi mode info
+            st.info("🪷 Rakhi mode: Upload a raw rakhi photo and we'll create a stunning photoshoot-level image with traditional Indian ceremonial props and styling.")
         
         # Generate Button
-        if is_pomelli:
+        if is_rakhi:
+            can_generate = bool(st.session_state.product_image)
+        elif is_pomelli:
             can_generate = all([
                 st.session_state.product_image,
                 st.session_state.logo_image,
@@ -215,7 +231,7 @@ def render_sidebar():
             ])
         
         generate_button = st.button(
-            "Apply Logo" if is_pomelli else "Generate Ad",
+            "✨ Create Rakhi Photoshoot" if is_rakhi else ("Apply Logo" if is_pomelli else "Generate Ad"),
             type="primary",
             disabled=not can_generate or st.session_state.generation_in_progress,
             use_container_width=True
@@ -231,10 +247,10 @@ def render_sidebar():
         if not can_generate:
             missing = []
             if not st.session_state.product_image:
-                missing.append("product image")
-            if not st.session_state.logo_image:
+                missing.append("rakhi image" if is_rakhi else "product image")
+            if not is_rakhi and not st.session_state.logo_image:
                 missing.append("company logo")
-            if not is_pomelli and not st.session_state.product_name.strip():
+            if not is_pomelli and not is_rakhi and not st.session_state.product_name.strip():
                 missing.append("product name")
             
             st.caption(f"Missing: {', '.join(missing)}")
@@ -259,7 +275,9 @@ def render_main_content():
     
     # Show generation progress or results
     if st.session_state.generation_in_progress:
-        if st.session_state.platform == "pomelli":
+        if st.session_state.platform == "rakhi":
+            render_rakhi_progress()
+        elif st.session_state.platform == "pomelli":
             render_pomelli_progress()
         else:
             render_generation_progress()
@@ -382,6 +400,161 @@ OUTPUT: Return the EXACT same photo with ONLY the exact provided logo (made blac
             status.update(label="Failed", state="error", expanded=True)
             st.error(f"Error: {str(e)}")
             logger.exception("Pomelli logo placement failed")
+            st.session_state.generation_in_progress = False
+            
+            if st.button("Try Again", use_container_width=True):
+                st.session_state.generation_in_progress = True
+                st.rerun()
+
+
+def render_rakhi_progress():
+    """Render rakhi mode: generate a photoshoot-level image from a raw rakhi photo."""
+    st.markdown("---")
+    
+    # Load the rakhi prompt from file
+    import os
+    rakhi_prompt_path = os.path.join(os.path.dirname(__file__), "rakhi-prompt.md")
+    try:
+        with open(rakhi_prompt_path, "r", encoding="utf-8") as f:
+            rakhi_prompt = f.read()
+    except FileNotFoundError:
+        st.error("rakhi-prompt.md not found! Please ensure the file exists in the project root.")
+        st.session_state.generation_in_progress = False
+        return
+    
+    # --- Add variety to each generation ---
+    import random
+    
+    surfaces = [
+        "a textured, natural fiber handmade paper with a light, speckled, warm grey-beige color",
+        "a rich, dark walnut wood surface with visible natural grain patterns",
+        "a smooth, creamy white marble slab with subtle grey veining",
+        "a rustic terracotta clay tile with a warm, earthy orange-brown tone",
+        "a deep burgundy raw silk fabric draped flat with fine texture visible",
+        "an aged brass tray with a beautiful green-gold patina",
+        "a woven jute mat with a natural golden-tan color and visible weave texture",
+        "a dark slate stone surface with subtle grey-blue tones and matte finish",
+    ]
+    
+    accent_sets = [
+        "a fresh dark green banana leaf segment, a polished brass bowl of vibrant red kumkum powder, scattered uncooked basmati rice grains",
+        "a cluster of fresh marigold flowers (orange and yellow), a small silver bowl of turmeric paste, a few cardamom pods",
+        "fresh jasmine flower strings, a copper kalash (small pot), scattered red and yellow rose petals",
+        "a betel leaf arrangement, a small clay diya with a cotton wick, a sprinkle of golden turmeric powder",
+        "a mango leaf toran (garland), a brass bell, scattered mogra (jasmine) buds",
+        "neem leaves arranged decoratively, a silver plate with sindoor, loose saffron threads",
+        "lotus petals (pink and white), a small sandalwood piece, scattered dried marigold petals",
+        "tulsi (holy basil) sprigs, a decorative brass diya, a trail of bright orange kumkum",
+    ]
+    
+    textiles = [
+        "a delicate, fine-weave gold mesh textile",
+        "a piece of rich red Banarasi silk with gold zari border",
+        "a soft pastel pink chiffon dupatta with silver thread embroidery",
+        "a deep emerald green velvet fabric with gold embroidery accents",
+        "a cream-colored raw silk piece with subtle gold brocade",
+        "a royal purple satin fabric with intricate gold threadwork",
+        "a traditional bandhani (tie-dye) fabric in red and yellow",
+        "a sheer gold organza fabric catching light beautifully",
+    ]
+    
+    flower_scatters = [
+        "deep crimson and bright yellow rose petals",
+        "orange marigold petals and white jasmine buds",
+        "pink lotus petals and golden champa flowers",
+        "red hibiscus petals and tiny white mogra flowers",
+        "purple and white orchid petals",
+        "mixed marigold petals in sunset shades (orange, yellow, gold)",
+        "pale pink and deep magenta bougainvillea petals",
+        "dried rose buds and fresh lavender sprigs",
+    ]
+    
+    lighting_moods = [
+        "warm golden-hour sunlight with soft amber tones",
+        "cool morning daylight with a fresh, clean feel",
+        "rich, warm candlelight-inspired glow with deep shadows",
+        "bright midday diffused light with crisp, clear tones",
+        "soft dusk lighting with rose-gold warmth",
+        "dramatic side-lighting with elegant shadow play",
+    ]
+    
+    bonus_props = [
+        "a small decorative mirror and a few whole cloves",
+        "a sandalwood incense stick (unlit) and some dried flower buds",
+        "a tiny brass Ganesha figurine and some roli grains",
+        "a decorative silver coin and a few almonds",
+        "a miniature peacock feather and betel nuts",
+        "a piece of raw sugarcane and some mishri (rock sugar) crystals",
+        "a small conch shell and some dried turmeric roots",
+        "a cotton thread spool (red and gold) and some whole black cardamom",
+    ]
+    
+    chosen_surface = random.choice(surfaces)
+    chosen_accents = random.choice(accent_sets)
+    chosen_textile = random.choice(textiles)
+    chosen_flowers = random.choice(flower_scatters)
+    chosen_lighting = random.choice(lighting_moods)
+    chosen_bonus = random.choice(bonus_props)
+    
+    variation_block = f"""
+
+--- VARIATION FOR THIS GENERATION (override the default accents with these) ---
+Surface: {chosen_surface}
+Accent elements: {chosen_accents}
+Textile/fabric: {chosen_textile}
+Scattered flowers: {chosen_flowers}
+Lighting mood: {chosen_lighting}
+Bonus props: {chosen_bonus}
+Use these specific elements instead of the defaults to create a UNIQUE composition. Keep the same overall structure (top-down flat-lay, rakhi centered, ceremonial feel) but make this version visually distinct.
+--- END VARIATION ---
+"""
+    rakhi_prompt = rakhi_prompt + variation_block
+    
+    with st.status("Creating rakhi photoshoot...", expanded=True) as status:
+        try:
+            st.write("**Step 1/1:** Generating photoshoot-level rakhi image...")
+            st.caption("This may take 30-60 seconds...")
+            
+            # For rakhi mode, we create a 1px transparent logo as a dummy
+            # since the ad_generator agent requires a logo_image
+            from PIL import Image as PILImage
+            dummy_logo = PILImage.new("RGBA", (1, 1), (0, 0, 0, 0))
+            dummy_logo_buffer = io.BytesIO()
+            dummy_logo.save(dummy_logo_buffer, format="PNG")
+            dummy_logo_bytes = dummy_logo_buffer.getvalue()
+            
+            # Create a minimal workflow state for Agent 3
+            state = create_initial_state(
+                platform="instagram",
+                aspect_ratio="1:1",
+                product_image=st.session_state.product_image,
+                logo_image=dummy_logo_bytes,
+                product_name="rakhi",
+            )
+            # Set the rakhi-specific prompt (skipping agents 1 & 2)
+            state["image_generation_prompt"] = rakhi_prompt
+            
+            # Call Agent 3 directly
+            result = agent3_ad_generator_sync(state)
+            state = {**state, **result}
+            
+            if state.get("error"):
+                raise Exception(f"Rakhi photoshoot generation failed: {state['error']}")
+            
+            st.write("✨ Photoshoot image created successfully!")
+            status.update(label="Done!", state="complete", expanded=False)
+            
+            # Store result
+            st.session_state.workflow_state = state
+            if state.get("generated_ad_image"):
+                st.session_state.generated_ad = Image.open(io.BytesIO(state["generated_ad_image"]))
+            st.session_state.generation_in_progress = False
+            st.rerun()
+            
+        except Exception as e:
+            status.update(label="Failed", state="error", expanded=True)
+            st.error(f"Error: {str(e)}")
+            logger.exception("Rakhi photoshoot generation failed")
             st.session_state.generation_in_progress = False
             
             if st.button("Try Again", use_container_width=True):
@@ -518,7 +691,8 @@ def render_results():
             img_buffer = io.BytesIO()
             st.session_state.generated_ad.save(img_buffer, format="PNG")
             
-            file_name = f"{st.session_state.product_name.replace(' ', '_')}_{st.session_state.platform}_{st.session_state.aspect_ratio.replace(':', 'x')}.png"
+            product_name_safe = st.session_state.product_name.replace(' ', '_') if st.session_state.product_name else st.session_state.platform
+            file_name = f"{product_name_safe}_{st.session_state.platform}_{st.session_state.aspect_ratio.replace(':', 'x')}.png"
             
             st.download_button(
                 "Download Ad",
