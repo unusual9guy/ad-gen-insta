@@ -326,7 +326,15 @@ LOGO RULES - CRITICAL:
 - DO NOT simplify, stylize, or reinterpret the logo - use it EXACTLY as given
 - The ONLY modification allowed is making the logo BLACK/MONOCHROME in color
 - Convert all non-transparent parts of the logo to solid BLACK color
-- Remove any white/light background from the logo - only show the logo graphic itself
+
+*** MOST IMPORTANT RULE - TRANSPARENT BACKGROUND ***
+- The logo MUST NOT have any white box, white rectangle, or white background behind it
+- REMOVE all white/light background from the logo completely
+- The logo must appear as if it is DIRECTLY ON TOP of the photo with NO background shape behind it
+- There should be ZERO visible background, border, box, or container around the logo
+- The black logo graphic should sit directly on the photo surface as if printed/stamped on it
+- If the original logo has a white/light background, STRIP IT AWAY so only the logo shape remains
+- Think of it like a WATERMARK - just the logo shape, nothing else
 
 PLACEMENT INSTRUCTIONS:
 - Place the black version of the EXACT provided logo in the TOP-RIGHT CORNER of the image
@@ -334,7 +342,7 @@ PLACEMENT INSTRUCTIONS:
 - The logo should look professionally placed, subtle and elegant
 - Keep the original photo COMPLETELY UNCHANGED underneath
 
-OUTPUT: Return the EXACT same photo with ONLY the exact provided logo (made black) placed in the top-right corner.
+OUTPUT: Return the EXACT same photo with ONLY the exact provided logo (made black, with NO white background) placed in the top-right corner. The logo must blend directly onto the photo like a watermark with NO box or background behind it.
 """
     
     with st.status("Applying logo via AI...", expanded=True) as status:
