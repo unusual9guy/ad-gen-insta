@@ -425,87 +425,63 @@ def render_rakhi_progress():
     # --- Add variety to each generation ---
     import random
     
+    # ONLY light-toned surfaces
     surfaces = [
-        "a textured, natural fiber handmade paper with a light, speckled, warm grey-beige color",
-        "a rich, dark walnut wood surface with visible natural grain patterns",
+        "a textured, natural fiber handmade paper with a light, speckled, warm cream-beige color",
         "a smooth, creamy white marble slab with subtle grey veining",
-        "a rustic terracotta clay tile with a warm, earthy orange-brown tone",
-        "a deep burgundy raw silk fabric draped flat with fine texture visible",
-        "an aged brass tray with a beautiful green-gold patina",
-        "a woven jute mat with a natural golden-tan color and visible weave texture",
-        "a dark slate stone surface with subtle grey-blue tones and matte finish",
+        "a light sandy linen fabric laid flat with a soft, natural weave texture",
+        "a pale ivory handmade cotton rag paper with torn edges and visible fibers",
+        "a light warm grey concrete surface with a smooth matte finish",
+        "a bleached light oak wood surface with subtle pale grain patterns",
+        "a soft off-white muslin cloth draped flat with gentle creases",
+        "a light pistachio-tinted handmade paper with a delicate speckled texture",
     ]
     
-    accent_sets = [
-        "a fresh dark green banana leaf segment, a polished brass bowl of vibrant red kumkum powder, scattered uncooked basmati rice grains",
-        "a cluster of fresh marigold flowers (orange and yellow), a small silver bowl of turmeric paste, a few cardamom pods",
-        "fresh jasmine flower strings, a copper kalash (small pot), scattered red and yellow rose petals",
-        "a betel leaf arrangement, a small clay diya with a cotton wick, a sprinkle of golden turmeric powder",
-        "a mango leaf toran (garland), a brass bell, scattered mogra (jasmine) buds",
-        "neem leaves arranged decoratively, a silver plate with sindoor, loose saffron threads",
-        "lotus petals (pink and white), a small sandalwood piece, scattered dried marigold petals",
-        "tulsi (holy basil) sprigs, a decorative brass diya, a trail of bright orange kumkum",
+    # Minimal accent combos - only 2 items each, placed at edges
+    accent_combos = [
+        "a corner of a fresh dark green banana leaf peeking in from the top-left, and a small brass bowl of red kumkum partially visible at the edge",
+        "a few sparse rice grains scattered near the top-right corner, and the tip of a banana leaf entering from the left edge",
+        "a small brass kumkum bowl at one corner, and 3-4 loose flower petals near the opposite edge",
+        "a sprig of fresh green leaves at one corner, and a tiny pinch of scattered turmeric powder at the opposite edge",
+        "a single fresh banana leaf corner entering from the left, and a few scattered saffron threads near the bottom edge",
+        "a small polished brass diya at one corner, and a sparse trail of rice grains along one edge",
+        "a folded edge of gold mesh textile peeking in from one corner, and a tiny brass bowl of kumkum at the opposite corner",
+        "a small cluster of 3-4 rice grains at one corner, and a single green betel leaf partially visible at another edge",
     ]
     
-    textiles = [
-        "a delicate, fine-weave gold mesh textile",
-        "a piece of rich red Banarasi silk with gold zari border",
-        "a soft pastel pink chiffon dupatta with silver thread embroidery",
-        "a deep emerald green velvet fabric with gold embroidery accents",
-        "a cream-colored raw silk piece with subtle gold brocade",
-        "a royal purple satin fabric with intricate gold threadwork",
-        "a traditional bandhani (tie-dye) fabric in red and yellow",
-        "a sheer gold organza fabric catching light beautifully",
+    # Just a few petals scattered - very sparse
+    petal_styles = [
+        "2-3 deep crimson rose petals",
+        "3-4 mixed red and yellow rose petals",
+        "2-3 soft pink petals",
+        "a couple of bright yellow marigold petals",
+        "2-3 pale white jasmine buds",
+        "3-4 dried rose petals in muted tones",
     ]
     
-    flower_scatters = [
-        "deep crimson and bright yellow rose petals",
-        "orange marigold petals and white jasmine buds",
-        "pink lotus petals and golden champa flowers",
-        "red hibiscus petals and tiny white mogra flowers",
-        "purple and white orchid petals",
-        "mixed marigold petals in sunset shades (orange, yellow, gold)",
-        "pale pink and deep magenta bougainvillea petals",
-        "dried rose buds and fresh lavender sprigs",
-    ]
-    
+    # Only bright, airy lighting
     lighting_moods = [
-        "warm golden-hour sunlight with soft amber tones",
-        "cool morning daylight with a fresh, clean feel",
-        "rich, warm candlelight-inspired glow with deep shadows",
-        "bright midday diffused light with crisp, clear tones",
-        "soft dusk lighting with rose-gold warmth",
-        "dramatic side-lighting with elegant shadow play",
-    ]
-    
-    bonus_props = [
-        "a small decorative mirror and a few whole cloves",
-        "a sandalwood incense stick (unlit) and some dried flower buds",
-        "a tiny brass Ganesha figurine and some roli grains",
-        "a decorative silver coin and a few almonds",
-        "a miniature peacock feather and betel nuts",
-        "a piece of raw sugarcane and some mishri (rock sugar) crystals",
-        "a small conch shell and some dried turmeric roots",
-        "a cotton thread spool (red and gold) and some whole black cardamom",
+        "soft, diffused natural daylight - bright and airy",
+        "clean morning light with a fresh, crisp feel",
+        "warm but bright natural window light",
+        "soft overcast daylight - even and shadow-free",
+        "gentle warm-toned daylight with minimal shadows",
     ]
     
     chosen_surface = random.choice(surfaces)
-    chosen_accents = random.choice(accent_sets)
-    chosen_textile = random.choice(textiles)
-    chosen_flowers = random.choice(flower_scatters)
+    chosen_accents = random.choice(accent_combos)
+    chosen_petals = random.choice(petal_styles)
     chosen_lighting = random.choice(lighting_moods)
-    chosen_bonus = random.choice(bonus_props)
     
     variation_block = f"""
 
---- VARIATION FOR THIS GENERATION (override the default accents with these) ---
+--- VARIATION FOR THIS GENERATION ---
 Surface: {chosen_surface}
-Accent elements: {chosen_accents}
-Textile/fabric: {chosen_textile}
-Scattered flowers: {chosen_flowers}
-Lighting mood: {chosen_lighting}
-Bonus props: {chosen_bonus}
-Use these specific elements instead of the defaults to create a UNIQUE composition. Keep the same overall structure (top-down flat-lay, rakhi centered, ceremonial feel) but make this version visually distinct.
+Edge accents (only these 2 items, partially cropped at edges): {chosen_accents}
+Sparse petals (scatter loosely, do NOT overdo): {chosen_petals}
+Lighting: {chosen_lighting}
+
+REMINDER: Keep the surface LIGHT. Use ONLY these 2 accent elements at the far edges. Leave lots of empty space. The rakhi must dominate the frame. Do NOT add extra props, figurines, garlands, or objects beyond what is listed above.
 --- END VARIATION ---
 """
     rakhi_prompt = rakhi_prompt + variation_block

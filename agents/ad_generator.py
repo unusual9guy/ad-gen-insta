@@ -105,9 +105,11 @@ class AdGeneratorAgent(BaseAgent[bytes]):
         # Get target dimensions
         target_size = self._get_target_size(aspect_ratio)
         
-        # Enhance the prompt with critical instructions (skip for pomelli mode)
+        # Enhance the prompt with critical instructions (skip for pomelli/rakhi modes)
         if "POMELLI MODE" in prompt:
             enhanced_prompt = prompt  # Pomelli prompt is self-contained
+        elif "RAKHI PHOTOSHOOT" in prompt:
+            enhanced_prompt = prompt  # Rakhi prompt is self-contained
         else:
             enhanced_prompt = self._enhance_prompt(prompt, aspect_ratio, additional_comments)
         
@@ -235,10 +237,14 @@ MAIN PROMPT:
         
         # Resize images to reduce payload and prevent timeouts
         product_resized = self._resize_for_api(product_image, max_dimension=768)
-        logo_resized = self._resize_for_api(logo_image, max_dimension=256)
         
-        # Prepare contents: prompt + resized product image + resized logo image
-        contents = [prompt, product_resized, logo_resized]
+        # For Rakhi mode, only send the rakhi image (no logo needed)
+        if "RAKHI PHOTOSHOOT" in prompt:
+            contents = [prompt, product_resized]
+        else:
+            logo_resized = self._resize_for_api(logo_image, max_dimension=256)
+            # Prepare contents: prompt + resized product image + resized logo image
+            contents = [prompt, product_resized, logo_resized]
         
         # Retry configuration
         max_retries = 3
