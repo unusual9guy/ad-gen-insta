@@ -127,24 +127,23 @@ def render_sidebar():
         
         st.divider()
         
-        # Step 3: Logo Upload (skip for rakhi mode)
-        if not is_rakhi:
-            st.markdown("### 3. Company Logo")
-            logo_file = st.file_uploader(
-                "Upload your company logo",
-                type=["png", "jpg", "jpeg", "webp"],
-                key="logo_uploader",
-                help="Logo will be converted to black and placed in top-right corner" if is_pomelli else "Logo will be converted to monochrome and placed in top-right corner"
-            )
-            
-            if logo_file:
-                result = process_uploaded_image(logo_file)
-                if result:
-                    st.session_state.logo_image = result[0]
-                    st.session_state.logo_image_preview = result[1]
-                    st.image(result[1], caption="Logo Preview", use_container_width=True)
-            
-            st.divider()
+        # Step 3: Logo Upload
+        st.markdown("### 3. Company Logo")
+        logo_file = st.file_uploader(
+            "Upload your company logo",
+            type=["png", "jpg", "jpeg", "webp"],
+            key="logo_uploader",
+            help="Logo will be converted to black and placed in top-right corner"
+        )
+        
+        if logo_file:
+            result = process_uploaded_image(logo_file)
+            if result:
+                st.session_state.logo_image = result[0]
+                st.session_state.logo_image_preview = result[1]
+                st.image(result[1], caption="Logo Preview", use_container_width=True)
+        
+        st.divider()
         
         # Only show these fields for standard ad modes (not pomelli or rakhi)
         if not is_pomelli and not is_rakhi:
@@ -213,11 +212,14 @@ def render_sidebar():
             st.info("Pomelli mode: Your photo will be kept as-is with a black logo overlay in the top-right corner.")
         elif is_rakhi:
             # Rakhi mode info
-            st.info("🪷 Rakhi mode: Upload a raw rakhi photo and we'll create a stunning photoshoot-level image with traditional Indian ceremonial props and styling.")
+            st.info("🪷 Rakhi mode: Upload a raw rakhi photo and your company logo. We'll create a stunning photoshoot-level image with your black logo integrated.")
         
         # Generate Button
         if is_rakhi:
-            can_generate = bool(st.session_state.product_image)
+            can_generate = all([
+                st.session_state.product_image,
+                st.session_state.logo_image,
+            ])
         elif is_pomelli:
             can_generate = all([
                 st.session_state.product_image,
@@ -248,7 +250,7 @@ def render_sidebar():
             missing = []
             if not st.session_state.product_image:
                 missing.append("rakhi image" if is_rakhi else "product image")
-            if not is_rakhi and not st.session_state.logo_image:
+            if not st.session_state.logo_image:
                 missing.append("company logo")
             if not is_pomelli and not is_rakhi and not st.session_state.product_name.strip():
                 missing.append("product name")
@@ -484,27 +486,45 @@ Lighting: {chosen_lighting}
 REMINDER: Keep the surface LIGHT. Use ONLY these 2 accent elements at the far edges. Leave lots of empty space. The rakhi must dominate the frame. Do NOT add extra props, figurines, garlands, or objects beyond what is listed above.
 --- END VARIATION ---
 """
-    rakhi_prompt = rakhi_prompt + variation_block
+    # Add logo integration instructions to the rakhi prompt
+    logo_instructions = """
+
+--- LOGO INTEGRATION ---
+I am also providing a company logo image along with the rakhi image.
+LOGO RULES - CRITICAL:
+- USE THE EXACT LOGO IMAGE PROVIDED - do NOT redraw, recreate, or modify the logo shape/design in ANY way
+- The logo must be a PIXEL-PERFECT copy of the provided logo image
+- DO NOT change the logo's shape, proportions, text, icons, or any detail whatsoever
+- DO NOT simplify, stylize, or reinterpret the logo - use it EXACTLY as given
+- The ONLY modification allowed is making the logo BLACK/MONOCHROME in color
+- Convert all non-transparent parts of the logo to solid BLACK color
+
+*** MOST IMPORTANT RULE - TRANSPARENT BACKGROUND ***
+- The logo MUST NOT have any white box, white rectangle, or white background behind it
+- REMOVE all white/light background from the logo completely
+- The logo must appear as if it is DIRECTLY ON TOP of the photo with NO background shape behind it
+- There should be ZERO visible background, border, box, or container around the logo
+- The black logo graphic should sit directly on the photo surface as if printed/stamped on it
+
+PLACEMENT INSTRUCTIONS:
+- Place the black version of the EXACT provided logo in the TOP-RIGHT CORNER of the image
+- Make the logo SMALL - about 5-8% of the image width
+- The logo should look professionally placed, subtle and elegant
+--- END LOGO INTEGRATION ---
+"""
+    rakhi_prompt = rakhi_prompt + variation_block + logo_instructions
     
     with st.status("Creating rakhi photoshoot...", expanded=True) as status:
         try:
-            st.write("**Step 1/1:** Generating photoshoot-level rakhi image...")
+            st.write("**Step 1/1:** Generating photoshoot-level rakhi image with logo...")
             st.caption("This may take 30-60 seconds...")
-            
-            # For rakhi mode, we create a 1px transparent logo as a dummy
-            # since the ad_generator agent requires a logo_image
-            from PIL import Image as PILImage
-            dummy_logo = PILImage.new("RGBA", (1, 1), (0, 0, 0, 0))
-            dummy_logo_buffer = io.BytesIO()
-            dummy_logo.save(dummy_logo_buffer, format="PNG")
-            dummy_logo_bytes = dummy_logo_buffer.getvalue()
             
             # Create a minimal workflow state for Agent 3
             state = create_initial_state(
                 platform="instagram",
                 aspect_ratio="1:1",
                 product_image=st.session_state.product_image,
-                logo_image=dummy_logo_bytes,
+                logo_image=st.session_state.logo_image,
                 product_name="rakhi",
             )
             # Set the rakhi-specific prompt (skipping agents 1 & 2)

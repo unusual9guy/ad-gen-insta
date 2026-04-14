@@ -8,3 +8,6 @@ model_names.md
 GoodAgentArch.py
 
 /data
+.agent
+
+/assets 

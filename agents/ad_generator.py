@@ -237,14 +237,10 @@ MAIN PROMPT:
         
         # Resize images to reduce payload and prevent timeouts
         product_resized = self._resize_for_api(product_image, max_dimension=768)
+        logo_resized = self._resize_for_api(logo_image, max_dimension=256)
         
-        # For Rakhi mode, only send the rakhi image (no logo needed)
-        if "RAKHI PHOTOSHOOT" in prompt:
-            contents = [prompt, product_resized]
-        else:
-            logo_resized = self._resize_for_api(logo_image, max_dimension=256)
-            # Prepare contents: prompt + resized product image + resized logo image
-            contents = [prompt, product_resized, logo_resized]
+        # Prepare contents: prompt + resized product image + resized logo image
+        contents = [prompt, product_resized, logo_resized]
         
         # Retry configuration
         max_retries = 3
