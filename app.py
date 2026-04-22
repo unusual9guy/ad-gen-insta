@@ -8,6 +8,8 @@ product ads using a multi-agent LangGraph workflow.
 import streamlit as st
 from PIL import Image
 import io
+import zipfile
+import os
 from typing import Optional
 import logging
 from datetime import datetime
@@ -54,6 +56,14 @@ def init_session_state():
         "error_message": None,
         "show_history": False,
         "current_step": 0,  # For progress tracking
+        # Bulk Rakhi mode
+        "bulk_rakhi_images": [],       # list of (bytes, PIL.Image) tuples
+        "bulk_rakhi_results": [],      # list of PIL.Image (generated ads)
+        "bulk_rakhi_errors": [],       # list of error strings (None if success)
+        "bulk_rakhi_progress": 0,      # current count completed
+        "bulk_rakhi_total": 0,         # total images in batch
+        "bulk_mode_active": False,     # whether bulk mode is in progress
+        "bulk_mode_done": False,       # whether bulk mode finished
     }
     
     for key, value in defaults.items():
@@ -100,15 +110,46 @@ def render_sidebar():
         
         st.divider()
         
-        # Step 2: Product Image Upload (or Rakhi Image for rakhi mode)
+        # Step 2: Product Image Upload (or Rakhi Images for rakhi mode)
         if is_rakhi:
-            st.markdown("### 2. Rakhi Image")
-            product_file = st.file_uploader(
-                "Upload your rakhi photo",
+            st.markdown("### 2. Rakhi Images")
+            st.caption("Upload 1–20 rakhi photos for bulk photoshoot generation")
+            rakhi_files = st.file_uploader(
+                "Upload your rakhi photos",
                 type=["png", "jpg", "jpeg", "webp"],
                 key="product_uploader",
-                help="Upload a clear photo of your rakhi for photoshoot-level enhancement"
+                accept_multiple_files=True,
+                help="Upload up to 20 clear photos of your rakhis for photoshoot-level enhancement"
             )
+            
+            if rakhi_files:
+                if len(rakhi_files) > 20:
+                    st.warning(f"⚠️ Maximum 20 images allowed. Only the first 20 of {len(rakhi_files)} will be processed.")
+                    rakhi_files = rakhi_files[:20]
+                
+                # Process and store all uploaded images
+                bulk_images = []
+                for f in rakhi_files:
+                    result = process_uploaded_image(f)
+                    if result:
+                        bulk_images.append(result)
+                
+                st.session_state.bulk_rakhi_images = bulk_images
+                # Also set product_image to the first one for compatibility
+                if bulk_images:
+                    st.session_state.product_image = bulk_images[0][0]
+                    st.session_state.product_image_preview = bulk_images[0][1]
+                
+                # Show thumbnail grid
+                st.markdown(f"**{len(bulk_images)} image(s) ready**")
+                cols = st.columns(4)
+                for idx, (img_bytes, img_pil) in enumerate(bulk_images):
+                    with cols[idx % 4]:
+                        st.image(img_pil, caption=f"Rakhi {idx + 1}", use_container_width=True)
+            else:
+                st.session_state.bulk_rakhi_images = []
+                st.session_state.product_image = None
+                st.session_state.product_image_preview = None
         else:
             st.markdown("### 2. Product Image")
             product_file = st.file_uploader(
@@ -117,13 +158,13 @@ def render_sidebar():
                 key="product_uploader",
                 help="Upload a clear image of your product"
             )
-        
-        if product_file:
-            result = process_uploaded_image(product_file)
-            if result:
-                st.session_state.product_image = result[0]
-                st.session_state.product_image_preview = result[1]
-                st.image(result[1], caption="Rakhi Preview" if is_rakhi else "Product Preview", use_container_width=True)
+            
+            if product_file:
+                result = process_uploaded_image(product_file)
+                if result:
+                    st.session_state.product_image = result[0]
+                    st.session_state.product_image_preview = result[1]
+                    st.image(result[1], caption="Product Preview", use_container_width=True)
         
         st.divider()
         
@@ -216,8 +257,9 @@ def render_sidebar():
         
         # Generate Button
         if is_rakhi:
+            bulk_count = len(st.session_state.bulk_rakhi_images)
             can_generate = all([
-                st.session_state.product_image,
+                bulk_count > 0,
                 st.session_state.logo_image,
             ])
         elif is_pomelli:
@@ -232,10 +274,18 @@ def render_sidebar():
                 st.session_state.product_name.strip()
             ])
         
+        if is_rakhi:
+            bulk_count = len(st.session_state.bulk_rakhi_images)
+            btn_label = f"✨ Create Rakhi Photoshoot ({bulk_count} image{'s' if bulk_count != 1 else ''})" if bulk_count > 0 else "✨ Create Rakhi Photoshoot"
+        elif is_pomelli:
+            btn_label = "Apply Logo"
+        else:
+            btn_label = "Generate Ad"
+        
         generate_button = st.button(
-            "✨ Create Rakhi Photoshoot" if is_rakhi else ("Apply Logo" if is_pomelli else "Generate Ad"),
+            btn_label,
             type="primary",
-            disabled=not can_generate or st.session_state.generation_in_progress,
+            disabled=not can_generate or st.session_state.generation_in_progress or st.session_state.bulk_mode_active,
             use_container_width=True
         )
         
@@ -244,12 +294,22 @@ def render_sidebar():
             st.session_state.current_step = 0
             st.session_state.generated_ad = None
             st.session_state.linkedin_text = None
+            if is_rakhi:
+                st.session_state.bulk_mode_active = True
+                st.session_state.bulk_mode_done = False
+                st.session_state.bulk_rakhi_results = []
+                st.session_state.bulk_rakhi_errors = []
+                st.session_state.bulk_rakhi_progress = 0
+                st.session_state.bulk_rakhi_total = len(st.session_state.bulk_rakhi_images)
             st.rerun()
         
         if not can_generate:
             missing = []
-            if not st.session_state.product_image:
-                missing.append("rakhi image" if is_rakhi else "product image")
+            if is_rakhi:
+                if len(st.session_state.bulk_rakhi_images) == 0:
+                    missing.append("rakhi image(s)")
+            elif not st.session_state.product_image:
+                missing.append("product image")
             if not st.session_state.logo_image:
                 missing.append("company logo")
             if not is_pomelli and not is_rakhi and not st.session_state.product_name.strip():
@@ -266,23 +326,33 @@ def render_sidebar():
 def render_main_content():
     """Render the main content area with results."""
     # Header
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.title("Product Ad Generator")
-    with col2:
-        if st.session_state.generated_ad:
-            st.markdown("")  # Spacing
-    
-    st.markdown("Generate professional product ads for Instagram and LinkedIn using AI agents.")
+    st.markdown("""
+        <div class="animated-hero" style="padding: 3rem 0; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                <div style="width: 12px; height: 12px; background: #CCFF00; border-radius: 50%; box-shadow: 0 0 10px #CCFF00;"></div>
+                <span style="font-family: 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem; color: #CCFF00;">System Online</span>
+            </div>
+            <h1 style="font-size: clamp(3rem, 5vw, 6rem) !important; margin-bottom: 0 !important; line-height: 0.9; letter-spacing: -0.04em; color: #FFFFFF;">
+                ADGEN <span style="color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,0.4); font-style: italic;">STUDIO</span>
+            </h1>
+            <p style="font-size: 1.25rem; color: #888888; max-width: 600px; margin-top: 1.5rem; line-height: 1.6; font-weight: 400;">
+                Orchestrate professional AI-generated product campaigns across Instagram and LinkedIn with our multi-agent engine.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
     # Show generation progress or results
     if st.session_state.generation_in_progress:
-        if st.session_state.platform == "rakhi":
+        if st.session_state.platform == "rakhi" and st.session_state.bulk_mode_active:
+            render_bulk_rakhi_progress()
+        elif st.session_state.platform == "rakhi":
             render_rakhi_progress()
         elif st.session_state.platform == "pomelli":
             render_pomelli_progress()
         else:
             render_generation_progress()
+    elif st.session_state.bulk_mode_done:
+        render_bulk_rakhi_results()
     elif st.session_state.generated_ad:
         render_results()
     elif st.session_state.show_history:
@@ -558,6 +628,321 @@ PLACEMENT INSTRUCTIONS:
                 st.rerun()
 
 
+def _build_rakhi_prompt():
+    """Build the rakhi prompt with random variation and logo instructions. Returns the full prompt string."""
+    import random
+    
+    rakhi_prompt_path = os.path.join(os.path.dirname(__file__), "rakhi-prompt.md")
+    with open(rakhi_prompt_path, "r", encoding="utf-8") as f:
+        rakhi_prompt = f.read()
+    
+    # ONLY light-toned surfaces
+    surfaces = [
+        "a textured, natural fiber handmade paper with a light, speckled, warm cream-beige color",
+        "a smooth, creamy white marble slab with subtle grey veining",
+        "a light sandy linen fabric laid flat with a soft, natural weave texture",
+        "a pale ivory handmade cotton rag paper with torn edges and visible fibers",
+        "a light warm grey concrete surface with a smooth matte finish",
+        "a bleached light oak wood surface with subtle pale grain patterns",
+        "a soft off-white muslin cloth draped flat with gentle creases",
+        "a light pistachio-tinted handmade paper with a delicate speckled texture",
+    ]
+    
+    accent_combos = [
+        "a corner of a fresh dark green banana leaf peeking in from the top-left, and a small brass bowl of red kumkum partially visible at the edge",
+        "a few sparse rice grains scattered near the top-right corner, and the tip of a banana leaf entering from the left edge",
+        "a small brass kumkum bowl at one corner, and 3-4 loose flower petals near the opposite edge",
+        "a sprig of fresh green leaves at one corner, and a tiny pinch of scattered turmeric powder at the opposite edge",
+        "a single fresh banana leaf corner entering from the left, and a few scattered saffron threads near the bottom edge",
+        "a small polished brass diya at one corner, and a sparse trail of rice grains along one edge",
+        "a folded edge of gold mesh textile peeking in from one corner, and a tiny brass bowl of kumkum at the opposite corner",
+        "a small cluster of 3-4 rice grains at one corner, and a single green betel leaf partially visible at another edge",
+    ]
+    
+    petal_styles = [
+        "2-3 deep crimson rose petals",
+        "3-4 mixed red and yellow rose petals",
+        "2-3 soft pink petals",
+        "a couple of bright yellow marigold petals",
+        "2-3 pale white jasmine buds",
+        "3-4 dried rose petals in muted tones",
+    ]
+    
+    lighting_moods = [
+        "soft, diffused natural daylight - bright and airy",
+        "clean morning light with a fresh, crisp feel",
+        "warm but bright natural window light",
+        "soft overcast daylight - even and shadow-free",
+        "gentle warm-toned daylight with minimal shadows",
+    ]
+    
+    chosen_surface = random.choice(surfaces)
+    chosen_accents = random.choice(accent_combos)
+    chosen_petals = random.choice(petal_styles)
+    chosen_lighting = random.choice(lighting_moods)
+    
+    variation_block = f"""
+
+--- VARIATION FOR THIS GENERATION ---
+Surface: {chosen_surface}
+Edge accents (only these 2 items, partially cropped at edges): {chosen_accents}
+Sparse petals (scatter loosely, do NOT overdo): {chosen_petals}
+Lighting: {chosen_lighting}
+
+REMINDER: Keep the surface LIGHT. Use ONLY these 2 accent elements at the far edges. Leave lots of empty space. The rakhi must dominate the frame. Do NOT add extra props, figurines, garlands, or objects beyond what is listed above.
+--- END VARIATION ---
+"""
+    logo_instructions = """
+
+--- LOGO INTEGRATION ---
+I am also providing a company logo image along with the rakhi image.
+LOGO RULES - CRITICAL:
+- USE THE EXACT LOGO IMAGE PROVIDED - do NOT redraw, recreate, or modify the logo shape/design in ANY way
+- The logo must be a PIXEL-PERFECT copy of the provided logo image
+- DO NOT change the logo's shape, proportions, text, icons, or any detail whatsoever
+- DO NOT simplify, stylize, or reinterpret the logo - use it EXACTLY as given
+- The ONLY modification allowed is making the logo BLACK/MONOCHROME in color
+- Convert all non-transparent parts of the logo to solid BLACK color
+
+*** MOST IMPORTANT RULE - TRANSPARENT BACKGROUND ***
+- The logo MUST NOT have any white box, white rectangle, or white background behind it
+- REMOVE all white/light background from the logo completely
+- The logo must appear as if it is DIRECTLY ON TOP of the photo with NO background shape behind it
+- There should be ZERO visible background, border, box, or container around the logo
+- The black logo graphic should sit directly on the photo surface as if printed/stamped on it
+
+PLACEMENT INSTRUCTIONS:
+- Place the black version of the EXACT provided logo in the TOP-RIGHT CORNER of the image
+- Make the logo SMALL - about 5-8% of the image width
+- The logo should look professionally placed, subtle and elegant
+--- END LOGO INTEGRATION ---
+"""
+    return rakhi_prompt + variation_block + logo_instructions
+
+
+def render_bulk_rakhi_progress():
+    """Render bulk rakhi mode: generate photoshoot-level images for multiple rakhi photos."""
+    st.markdown("---")
+    
+    bulk_images = st.session_state.bulk_rakhi_images
+    total = len(bulk_images)
+    
+    st.subheader(f"🪷 Bulk Rakhi Photoshoot — {total} image{'s' if total != 1 else ''}")
+    
+    # Progress bar and status text
+    progress_bar = st.progress(0, text=f"Processing: 0/{total}")
+    status_container = st.empty()
+    
+    # Container for results as they appear
+    results_area = st.container()
+    
+    results = []
+    errors = []
+    
+    try:
+        rakhi_prompt_path = os.path.join(os.path.dirname(__file__), "rakhi-prompt.md")
+        if not os.path.exists(rakhi_prompt_path):
+            st.error("rakhi-prompt.md not found! Please ensure the file exists in the project root.")
+            st.session_state.generation_in_progress = False
+            st.session_state.bulk_mode_active = False
+            return
+    except Exception:
+        st.error("Could not locate rakhi-prompt.md")
+        st.session_state.generation_in_progress = False
+        st.session_state.bulk_mode_active = False
+        return
+    
+    for idx, (img_bytes, img_pil) in enumerate(bulk_images):
+        current = idx + 1
+        progress_fraction = idx / total
+        progress_bar.progress(progress_fraction, text=f"Processing: {idx}/{total} done — generating image {current}...")
+        status_container.info(f"🎨 Generating photoshoot for Rakhi {current}/{total}...")
+        
+        try:
+            # Build a fresh prompt with random variation for each image
+            full_prompt = _build_rakhi_prompt()
+            
+            # Create workflow state for this image
+            state = create_initial_state(
+                platform="instagram",
+                aspect_ratio="1:1",
+                product_image=img_bytes,
+                logo_image=st.session_state.logo_image,
+                product_name="rakhi",
+            )
+            state["image_generation_prompt"] = full_prompt
+            
+            # Call Agent 3
+            result = agent3_ad_generator_sync(state)
+            state = {**state, **result}
+            
+            if state.get("error"):
+                raise Exception(f"Generation failed: {state['error']}")
+            
+            if state.get("generated_ad_image"):
+                generated_img = Image.open(io.BytesIO(state["generated_ad_image"]))
+                results.append(generated_img)
+                errors.append(None)
+                
+                # Show the result immediately in the results area
+                with results_area:
+                    cols = st.columns([1, 3, 1])
+                    with cols[1]:
+                        st.image(generated_img, caption=f"✅ Rakhi {current}/{total}", use_container_width=True)
+            else:
+                results.append(None)
+                errors.append("No image generated")
+                with results_area:
+                    st.warning(f"⚠️ Rakhi {current}/{total}: No image was returned")
+        
+        except Exception as e:
+            results.append(None)
+            errors.append(str(e))
+            logger.exception(f"Bulk rakhi generation failed for image {current}")
+            with results_area:
+                st.error(f"❌ Rakhi {current}/{total}: {str(e)}")
+        
+        # Update progress
+        progress_bar.progress(current / total, text=f"Processing: {current}/{total} done")
+    
+    # All done
+    success_count = sum(1 for e in errors if e is None)
+    fail_count = total - success_count
+    
+    status_container.empty()
+    progress_bar.progress(1.0, text=f"✅ Complete: {success_count}/{total} generated successfully")
+    
+    # Store results in session state
+    st.session_state.bulk_rakhi_results = results
+    st.session_state.bulk_rakhi_errors = errors
+    st.session_state.bulk_rakhi_progress = total
+    st.session_state.bulk_rakhi_total = total
+    st.session_state.generation_in_progress = False
+    st.session_state.bulk_mode_active = False
+    st.session_state.bulk_mode_done = True
+    
+    # Show summary and action buttons
+    if fail_count > 0:
+        st.warning(f"⚠️ {fail_count} image(s) failed. View results below.")
+    else:
+        st.success(f"🎉 All {total} images generated successfully!")
+    
+    if st.button("View Final Results", type="primary", use_container_width=True):
+        st.rerun()
+
+
+def render_bulk_rakhi_results():
+    """Render the final results grid for bulk rakhi generation."""
+    st.markdown("---")
+    
+    results = st.session_state.bulk_rakhi_results
+    errors = st.session_state.bulk_rakhi_errors
+    total = st.session_state.bulk_rakhi_total
+    
+    success_count = sum(1 for e in errors if e is None)
+    fail_count = total - success_count
+    
+    st.subheader("🪷 Bulk Rakhi Photoshoot Results")
+    
+    # Summary bar
+    if fail_count == 0:
+        st.success(f"✅ All {total} images generated successfully!")
+    else:
+        st.warning(f"✅ {success_count}/{total} generated successfully — ❌ {fail_count} failed")
+    
+    st.divider()
+    
+    # Image grid — 2 columns
+    successful_images = []
+    for idx in range(total):
+        if results[idx] is not None:
+            successful_images.append((idx, results[idx]))
+    
+    if successful_images:
+        cols = st.columns(2)
+        for i, (idx, img) in enumerate(successful_images):
+            with cols[i % 2]:
+                st.image(img, caption=f"Rakhi {idx + 1}", use_container_width=True)
+                
+                # Individual download button
+                img_buffer = io.BytesIO()
+                img.save(img_buffer, format="PNG")
+                st.download_button(
+                    f"⬇️ Download Rakhi {idx + 1}",
+                    data=img_buffer.getvalue(),
+                    file_name=f"rakhi_{idx + 1}.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"download_rakhi_{idx}"
+                )
+    
+    # Show failures
+    if fail_count > 0:
+        with st.expander(f"❌ {fail_count} Failed Generation(s)", expanded=False):
+            for idx in range(total):
+                if errors[idx] is not None:
+                    st.error(f"Rakhi {idx + 1}: {errors[idx]}")
+    
+    st.divider()
+    
+    # Action buttons
+    action_cols = st.columns(3)
+    
+    with action_cols[0]:
+        # Download All as ZIP
+        if successful_images:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                for idx, img in successful_images:
+                    img_bytes_buf = io.BytesIO()
+                    img.save(img_bytes_buf, format="PNG")
+                    zf.writestr(f"rakhi_{idx + 1}.png", img_bytes_buf.getvalue())
+            
+            st.download_button(
+                f"📦 Download All ({len(successful_images)} images)",
+                data=zip_buffer.getvalue(),
+                file_name="rakhi_photoshoot_bulk.zip",
+                mime="application/zip",
+                use_container_width=True,
+                type="primary"
+            )
+    
+    with action_cols[1]:
+        # Regenerate failed
+        if fail_count > 0:
+            if st.button(f"🔄 Retry {fail_count} Failed", use_container_width=True):
+                # Keep only failed images for reprocessing
+                failed_images = []
+                for idx in range(total):
+                    if errors[idx] is not None:
+                        failed_images.append(st.session_state.bulk_rakhi_images[idx])
+                
+                st.session_state.bulk_rakhi_images = failed_images
+                st.session_state.bulk_mode_done = False
+                st.session_state.bulk_mode_active = True
+                st.session_state.generation_in_progress = True
+                st.session_state.bulk_rakhi_results = []
+                st.session_state.bulk_rakhi_errors = []
+                st.session_state.bulk_rakhi_progress = 0
+                st.session_state.bulk_rakhi_total = len(failed_images)
+                st.rerun()
+    
+    with action_cols[2]:
+        # New batch
+        if st.button("✨ New Batch", use_container_width=True):
+            st.session_state.bulk_mode_done = False
+            st.session_state.bulk_mode_active = False
+            st.session_state.bulk_rakhi_images = []
+            st.session_state.bulk_rakhi_results = []
+            st.session_state.bulk_rakhi_errors = []
+            st.session_state.bulk_rakhi_progress = 0
+            st.session_state.bulk_rakhi_total = 0
+            st.session_state.generated_ad = None
+            st.session_state.product_image = None
+            st.session_state.logo_image = None
+            st.rerun()
+
+
 def render_generation_progress():
     """Render the generation progress indicator and run workflow with real-time updates."""
     st.markdown("---")
@@ -763,17 +1148,248 @@ def main():
     # Custom CSS for better styling
     st.markdown("""
         <style>
-        .stButton > button {
-            transition: all 0.3s ease;
-        }
-        .stButton > button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        div[data-testid="stExpander"] {
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
-        }
+            @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&display=swap');
+
+            :root {
+                --bg-base: #050505;
+                --panel-bg: rgba(20, 20, 22, 0.4);
+                --border-light: rgba(255, 255, 255, 0.08);
+                --accent-primary: #CCFF00;
+                --accent-glow: rgba(204, 255, 0, 0.3);
+                --text-main: #FAFAFA;
+                --text-muted: #888888;
+                --font-display: 'Bricolage Grotesque', sans-serif;
+                --font-body: 'DM Sans', sans-serif;
+            }
+
+            /* Base resets and overlays */
+            .stApp {
+                background-color: var(--bg-base);
+                color: var(--text-main);
+                font-family: var(--font-body);
+            }
+
+            /* Background gradient blobs & Noise */
+            .stApp::before {
+                content: "";
+                position: fixed;
+                top: 0; left: 0; width: 100vw; height: 100vh;
+                background: 
+                    radial-gradient(circle at 80% 0%, rgba(109, 40, 217, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at 0% 100%, rgba(204, 255, 0, 0.08) 0%, transparent 40%);
+                pointer-events: none;
+                z-index: 0;
+            }
+            .stApp::after {
+                content: "";
+                position: fixed;
+                top: 0; left: 0; width: 100vw; height: 100vh;
+                background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+                opacity: 0.04;
+                pointer-events: none;
+                z-index: 999;
+            }
+
+            /* Typography Overrides */
+            h1, h2, h3, h4, h5, h6 {
+                font-family: var(--font-display) !important;
+                font-weight: 800 !important;
+                letter-spacing: -0.03em !important;
+                color: var(--text-main) !important;
+            }
+
+            /* Hide default streamlit header */
+            header[data-testid="stHeader"] {
+                background: transparent !important;
+            }
+
+            /* Sidebar styling */
+            section[data-testid="stSidebar"] {
+                background-color: rgba(5, 5, 5, 0.8) !important;
+                backdrop-filter: blur(20px);
+                border-right: 1px solid var(--border-light);
+            }
+            
+            section[data-testid="stSidebar"] hr {
+                border-color: rgba(255,255,255,0.05) !important;
+                margin: 1.5rem 0 !important;
+            }
+
+            /* Input Fields */
+            .stTextInput input, .stTextArea textarea, 
+            div[data-testid="stSelectbox"] > div[role="combobox"] {
+                background: rgba(255, 255, 255, 0.03) !important;
+                border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                color: var(--text-main) !important;
+                border-radius: 8px !important;
+                font-family: var(--font-body) !important;
+                padding: 0.75rem 1rem !important;
+                transition: all 0.3s ease;
+            }
+
+            .stTextInput input:focus, .stTextArea textarea:focus, 
+            div[data-testid="stSelectbox"] > div[role="combobox"]:focus {
+                border-color: var(--accent-primary) !important;
+                box-shadow: 0 0 0 1px var(--accent-primary), 0 0 15px var(--accent-glow) !important;
+                background: rgba(255, 255, 255, 0.05) !important;
+                color: #fff !important;
+            }
+
+            /* Form labels and small text */
+            label, .st-emotion-cache-1j0zowj, p {
+                color: var(--text-muted) !important;
+            }
+            label {
+                font-family: var(--font-display) !important;
+                text-transform: uppercase;
+                font-size: 0.75rem !important;
+                letter-spacing: 0.05em;
+                color: var(--text-muted) !important;
+                margin-bottom: 0.25rem !important;
+            }
+
+            /* Primary Button */
+            .stButton > button {
+                background: var(--accent-primary) !important;
+                color: #000 !important;
+                border: none !important;
+                font-family: var(--font-display) !important;
+                font-weight: 700 !important;
+                font-size: 1rem !important;
+                text-transform: uppercase !important;
+                letter-spacing: 0.05em !important;
+                padding: 1rem 2rem !important;
+                border-radius: 4px !important;
+                transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+                box-shadow: 0 4px 15px var(--accent-glow) !important;
+                width: 100%;
+            }
+
+            .stButton > button:hover {
+                transform: translateY(-2px) !important;
+                background: #e6ff00 !important;
+                box-shadow: 0 8px 25px rgba(204, 255, 0, 0.5) !important;
+            }
+
+            .stButton > button:active {
+                transform: translateY(1px) !important;
+            }
+
+            /* Overriding typical streamlit "secondary" button look if they aren't primary */
+            button[kind="secondary"] {
+                background: transparent !important;
+                color: var(--text-main) !important;
+                border: 1px solid var(--border-light) !important;
+                box-shadow: none !important;
+            }
+            button[kind="secondary"]:hover {
+                background: rgba(255, 255, 255, 0.05) !important;
+                border-color: rgba(255, 255, 255, 0.2) !important;
+                color: #fff !important;
+            }
+
+            /* File Uploader Target */
+            [data-testid="stFileUploader"] > section {
+                background: rgba(255, 255, 255, 0.02) !important;
+                border: 1px dashed var(--border-light) !important;
+                border-radius: 8px !important;
+                transition: all 0.3s ease;
+                padding: 2rem !important;
+            }
+            [data-testid="stFileUploader"] > section:hover {
+                border-color: var(--accent-primary) !important;
+                background: rgba(204, 255, 0, 0.03) !important;
+            }
+            [data-testid="stFileUploader"] small {
+                font-family: var(--font-body);
+                color: var(--text-muted) !important;
+            }
+
+            /* Selectbox text dropdown styling */
+            div[data-baseweb="select"] li {
+                background: #000;
+                color: #fff;
+            }
+
+            /* Radio buttons container */
+            [role="radiogroup"] {
+                gap: 0.5rem;
+                flex-wrap: wrap;
+            }
+            .stRadio [role="radio"] {
+                background-color: rgba(255, 255, 255, 0.02);
+                padding: 0.4rem 0.8rem;
+                border-radius: 4px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                transition: all 0.3s ease;
+            }
+            .stRadio [role="radio"][aria-checked="true"] {
+                background-color: rgba(204, 255, 0, 0.1);
+                border-color: var(--accent-primary);
+                color: var(--accent-primary);
+            }
+            .stRadio [role="radio"] div {
+                color: inherit !important;
+            }
+            
+            /* Hide the default radio circle marker to look like pill buttons */
+            .stRadio [role="radio"] div[data-testid="stMarkdownContainer"] p {
+                color: inherit !important;
+            }
+            .stRadio [role="radio"] > div:first-child {
+                display: none;
+            }
+
+            /* Expander/Accordions */
+            [data-testid="stExpander"] {
+                background: var(--panel-bg) !important;
+                border: 1px solid var(--border-light) !important;
+                border-radius: 8px !important;
+                backdrop-filter: blur(10px);
+            }
+            [data-testid="stExpander"] summary {
+                font-family: var(--font-display);
+                font-size: 1.1rem;
+                color: var(--accent-primary);
+            }
+
+            /* Progress and Status Bars */
+            .stProgress > div > div > div {
+                background-color: var(--accent-primary) !important;
+            }
+            [data-testid="stStatusWidget"] {
+                background: var(--panel-bg) !important;
+                border: 1px solid var(--border-light) !important;
+                border-radius: 8px !important;
+            }
+            
+            /* Status text color */
+            [data-testid="stStatusWidget"] label {
+                color: var(--text-main) !important;
+            }
+
+            /* Markdown content text colors */
+            .stMarkdown p {
+                color: var(--text-muted);
+            }
+            .stMarkdown strong {
+                color: var(--text-main);
+            }
+
+            /* Custom Selection */
+            ::selection {
+                background: var(--accent-primary);
+                color: #000;
+            }
+
+            /* Animation classes */
+            @keyframes fadeInDown {
+                from { opacity: 0; transform: translateY(-20px); filter: blur(5px); }
+                to { opacity: 1; transform: translateY(0); filter: blur(0); }
+            }
+            .animated-hero {
+                animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
         </style>
     """, unsafe_allow_html=True)
     
