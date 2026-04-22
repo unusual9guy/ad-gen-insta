@@ -90,9 +90,16 @@ def get_aspect_ratio_options(platform: str) -> list[str]:
 
 
 def render_sidebar():
-    """Render the sidebar with all input controls."""
+    """Render the sidebar configuration."""
     with st.sidebar:
-        st.markdown("## Ad Configuration")
+        # Header in sidebar
+        st.markdown("""
+            <div style="margin-bottom: 2rem;">
+                <h2 style="font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; color: var(--accent-primary); margin-bottom: 0;">ADGEN</h2>
+                <div style="font-size: 0.8rem; font-family: var(--font-body); color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Studio</div>
+            </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<h2 style='font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 1.5rem; font-weight: 400; color: var(--text-main);'>Configuration</h2>", unsafe_allow_html=True)
         
         # Step 1: Platform Selection (moved to top)
         st.markdown("### 1. Platform")
@@ -327,20 +334,18 @@ def render_main_content():
     """Render the main content area with results."""
     # Header
     st.markdown("""
-        <div class="animated-hero" style="padding: 3rem 0; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <div class="animated-hero" style="padding: 2rem 0; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
             <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
-                <div style="width: 12px; height: 12px; background: #CCFF00; border-radius: 50%; box-shadow: 0 0 10px #CCFF00;"></div>
-                <span style="font-family: 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem; color: #CCFF00;">System Online</span>
+                <div style="width: 8px; height: 8px; background: #FFFFFF; border-radius: 50%;"></div>
+                <span style="font-family: 'Manrope', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem; color: #AAAAAA;">Adgen Studio • System Online</span>
             </div>
-            <h1 style="font-size: clamp(3rem, 5vw, 6rem) !important; margin-bottom: 0 !important; line-height: 0.9; letter-spacing: -0.04em; color: #FFFFFF;">
-                ADGEN <span style="color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,0.4); font-style: italic;">STUDIO</span>
+            <h1 style="font-size: clamp(2.5rem, 4vw, 4rem) !important; margin-bottom: 0 !important; line-height: 1; letter-spacing: -0.02em; color: #FFFFFF; font-weight: 400 !important;">
+                Orchestrate <span style="font-style: italic; color: #AAAAAA;">Professional</span> Campaigns
             </h1>
-            <p style="font-size: 1.25rem; color: #888888; max-width: 600px; margin-top: 1.5rem; line-height: 1.6; font-weight: 400;">
-                Orchestrate professional AI-generated product campaigns across Instagram and LinkedIn with our multi-agent engine.
-            </p>
         </div>
     """, unsafe_allow_html=True)
     
+    st.markdown("<h2 style='font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 1.5rem; font-weight: 400; color: var(--text-main);'>Preview & Results</h2>", unsafe_allow_html=True)
     # Show generation progress or results
     if st.session_state.generation_in_progress:
         if st.session_state.platform == "rakhi" and st.session_state.bulk_mode_active:
@@ -363,36 +368,25 @@ def render_main_content():
 
 def render_empty_state():
     """Render the empty state when no ad has been generated."""
-    st.markdown("---")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown(
-            """
-            ### How it works
-            
-            **1. Upload** your product image and company logo
-            
-            **2. Select** your target platform (Instagram or LinkedIn)
-            
-            **3. Choose** the aspect ratio for your ad
-            
-            **4. Enter** your product name
-            
-            **5. Generate** your professional ad!
-            
-            ---
-            
-            ### Our AI Agents
-            
-            | Agent | Task |
-            |-------|------|
-            | **Analyzer** | Examines your product image |
-            | **Prompt Engineer** | Creates optimal generation prompt |
-            | **Designer** | Generates the ad with your logo |
-            | **Copywriter** | Writes LinkedIn post (if selected) |
-            """
-        )
+    st.markdown(
+        """<div style="background: var(--panel-bg); padding: 2rem; border-radius: 8px; border: 1px solid var(--border-light);">
+<h3 style="font-family: var(--font-display); font-size: 1.5rem; color: var(--accent-primary); margin-bottom: 1rem;">How it works</h3>
+<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;"><strong>1. Upload</strong> your product image and company logo</p>
+<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;"><strong>2. Select</strong> your target platform (Instagram or LinkedIn)</p>
+<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;"><strong>3. Choose</strong> the aspect ratio for your ad</p>
+<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;"><strong>4. Enter</strong> your product name</p>
+<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;"><strong>5. Generate</strong> your professional ad!</p>
+
+<h3 style="font-family: var(--font-display); font-size: 1.25rem; color: var(--accent-primary); margin-bottom: 1rem;">Our AI Agents</h3>
+<ul style="color: var(--text-muted); font-size: 0.9rem; padding-left: 1.5rem;">
+<li><strong>Analyzer:</strong> Examines your product image</li>
+<li><strong>Prompt Engineer:</strong> Creates optimal generation prompt</li>
+<li><strong>Designer:</strong> Generates the ad with your logo</li>
+<li><strong>Copywriter:</strong> Writes LinkedIn post (if selected)</li>
+</ul>
+</div>""",
+        unsafe_allow_html=True
+    )
 
 
 def render_pomelli_progress():
@@ -1148,19 +1142,21 @@ def main():
     # Custom CSS for better styling
     st.markdown("""
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@300;400;500;600;700&display=swap');
 
             :root {
-                --bg-base: #050505;
-                --panel-bg: rgba(20, 20, 22, 0.4);
+                --bg-base: #0a0a0a;
+                --panel-bg: rgba(255, 255, 255, 0.02);
                 --border-light: rgba(255, 255, 255, 0.08);
-                --accent-primary: #CCFF00;
-                --accent-glow: rgba(204, 255, 0, 0.3);
-                --text-main: #FAFAFA;
+                --accent-primary: #ffffff;
+                --accent-glow: rgba(255, 255, 255, 0.1);
+                --text-main: #f5f5f5;
                 --text-muted: #888888;
-                --font-display: 'Bricolage Grotesque', sans-serif;
-                --font-body: 'DM Sans', sans-serif;
+                --font-display: 'Instrument Serif', serif;
+                --font-body: 'Manrope', sans-serif;
             }
+            
+
 
             /* Base resets and overlays */
             .stApp {
@@ -1267,8 +1263,8 @@ def main():
 
             .stButton > button:hover {
                 transform: translateY(-2px) !important;
-                background: #e6ff00 !important;
-                box-shadow: 0 8px 25px rgba(204, 255, 0, 0.5) !important;
+                background: #cccccc !important;
+                box-shadow: 0 8px 25px rgba(255, 255, 255, 0.2) !important;
             }
 
             .stButton > button:active {
@@ -1324,9 +1320,9 @@ def main():
                 transition: all 0.3s ease;
             }
             .stRadio [role="radio"][aria-checked="true"] {
-                background-color: rgba(204, 255, 0, 0.1);
+                background-color: rgba(255, 255, 255, 0.1);
                 border-color: var(--accent-primary);
-                color: var(--accent-primary);
+                color: var(--text-main);
             }
             .stRadio [role="radio"] div {
                 color: inherit !important;
